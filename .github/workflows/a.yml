@@ -61,7 +61,7 @@ jobs:
               # Method 1: Gunakan curl + APKCombo web search
               cmd = [
                   'curl', '-s',
-                  'https://apkcombo.com/youtube/com.google.android.youtube/download?version=20.21.37',
+                  'https://www.apkmirror.com/wp-content/themes/APKMirror/download.php?id=9518005&key=ea6b43f77da5cffee56987b912ee0639dfc5dc59&forcebaseapk=true',
                   '-L', '-o', 'youtube-20.21.37.apk'
               ]
               result = subprocess.run(cmd, capture_output=True, text=True)
