@@ -1,4 +1,9 @@
+name: Auto Patch YouTube v20.21.37
+
 on:
+  schedule:
+    # Jalankan setiap minggu Minggu jam 00:00 UTC
+    - cron: '0 0 * * 0'
   workflow_dispatch:
 
 jobs:
@@ -97,6 +102,7 @@ jobs:
           java -jar tools/morphe-cli.jar patch \
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
+            --exclusive \
             youtube-20.21.37.apk \
             --out youtube-20.21.37-patched.apk
           
