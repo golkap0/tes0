@@ -39,60 +39,36 @@ jobs:
           echo "✓ Morphe patches downloaded"
           ls -lh patches.mpp
       
-      # Download YouTube APK versi 20.21.37 menggunakan APKCombo API
-      - name: Download YouTube APK v20.21.37
+      # Download YouTube APK versi 20.21.37 dari APKMirror
+      - name: Download YouTube APK v20.21.37 from APKMirror
         run: |
-          echo "Downloading YouTube v20.21.37..."
+          echo "Downloading YouTube v20.21.37 from APKMirror..."
           
-          # Download dari APKMirror (alternative method)
-          # Format URL: https://www.apkmirror.com/apk/google-inc/youtube/
+          wget -O youtube-20.21.37.apk \
+            'https://www.apkmirror.com/wp-content/themes/APKMirror/download.php?id=9518005&key=ea6b43f77da5cffee56987b912ee0639dfc5dc59&forcebaseapk=true'
           
-          # Gunakan script Python untuk download dari web
-          python3 << 'EOF'
-          import urllib.request
-          import json
-          import subprocess
-          import os
+          # Verify download
+          if [ ! -f youtube-20.21.37.apk ]; then
+            echo "✗ Failed to download APK"
+            exit 1
+          fi
           
-          # Coba download menggunakan curl ke APKCombo API
-          try:
-              print("Attempting to download YouTube v20.21.37...")
-              
-              # Method 1: Gunakan curl + APKCombo web search
-              cmd = [
-                  'curl', '-s',
-                  'https://www.apkmirror.com/wp-content/themes/APKMirror/download.php?id=9518005&key=ea6b43f77da5cffee56987b912ee0639dfc5dc59&forcebaseapk=true',
-                  '-L', '-o', 'youtube-20.21.37.apk'
-              ]
-              result = subprocess.run(cmd, capture_output=True, text=True)
-              
-              if os.path.exists('youtube-20.21.37.apk') and os.path.getsize('youtube-20.21.37.apk') > 1000000:
-                  print("✓ Downloaded successfully")
-                  size_mb = os.path.getsize('youtube-20.21.37.apk') / 1024 / 1024
-                  print(f"  Size: {size_mb:.2f} MB")
-              else:
-                  print("✗ Download failed or file too small")
-                  exit(1)
-          except Exception as e:
-              print(f"Error: {e}")
-              exit(1)
-          EOF
+          FILE_SIZE=$(stat -c%s youtube-20.21.37.apk 2>/dev/null || stat -f%z youtube-20.21.37.apk 2>/dev/null)
+          if [ "$FILE_SIZE" -lt 1000000 ]; then
+            echo "✗ Downloaded file too small ($FILE_SIZE bytes)"
+            exit 1
+          fi
+          
+          echo "✓ YouTube v20.21.37 downloaded"
+          ls -lh youtube-20.21.37.apk
       
-      # Verify APK
+      # Verify APK is valid
       - name: Verify YouTube APK
         run: |
-          if [ -f youtube-20.21.37.apk ]; then
-            echo "✓ YouTube v20.21.37 APK found"
-            ls -lh youtube-20.21.37.apk
-            # Verify it's a valid APK (ZIP file)
-            if unzip -t youtube-20.21.37.apk > /dev/null 2>&1; then
-              echo "✓ APK is valid"
-            else
-              echo "✗ APK is not valid"
-              exit 1
-            fi
+          if unzip -t youtube-20.21.37.apk > /dev/null 2>&1; then
+            echo "✓ APK is valid ZIP/APK file"
           else
-            echo "✗ Failed to download YouTube APK"
+            echo "✗ APK is corrupted or invalid"
             exit 1
           fi
       
@@ -117,13 +93,12 @@ jobs:
             echo "✓ Patched APK created successfully"
             SIZE=$(ls -lh youtube-20.21.37-patched.apk | awk '{print $5}')
             echo "  Size: $SIZE"
-            ls -lh youtube-20.21.37-patched.apk
             
             # Verify it's a valid APK
             if unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1; then
               echo "✓ Patched APK is valid"
             else
-              echo "✗ Patched APK is not valid"
+              echo "✗ Patched APK is corrupted"
               exit 1
             fi
           else
