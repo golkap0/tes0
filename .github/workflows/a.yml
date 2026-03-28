@@ -39,29 +39,55 @@ jobs:
           echo "✓ Morphe patches downloaded"
           ls -lh patches.mpp
       
-      # Download YouTube APK versi 20.21.37 dari Google Drive
+      # Download YouTube APK versi 20.21.37 dari Google Drive (file besar)
       - name: Download YouTube APK v20.21.37 from Google Drive
         run: |
           echo "Downloading YouTube v20.21.37 from Google Drive..."
           
-          wget --no-check-certificate \
-            'https://docs.google.com/uc?export=download&id=16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW' \
-            -O 'youtube-20.21.37.apk'
+          GDRIVE_ID="16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW"
+          OUTPUT_FILE="youtube-20.21.37.apk"
+          
+          # Method 1: Gunakan curl dengan cookie handling untuk Google Drive
+          curl -L \
+            -b /tmp/cookies.txt -c /tmp/cookies.txt \
+            "https://docs.google.com/uc?export=download&id=${GDRIVE_ID}" \
+            -o "${OUTPUT_FILE}" \
+            --progress-bar
+          
+          # Jika download gagal, coba method 2
+          if [ ! -f "${OUTPUT_FILE}" ] || [ ! -s "${OUTPUT_FILE}" ]; then
+            echo "Method 1 failed, trying method 2..."
+            
+            # Method 2: Gunakan wget dengan custom headers
+            wget --header="Authorization: Bearer" \
+              --no-check-certificate \
+              --no-verbose \
+              --show-progress \
+              -O "${OUTPUT_FILE}" \
+              "https://docs.google.com/uc?export=download&confirm=9iBg&id=${GDRIVE_ID}"
+          fi
           
           # Verify download
-          if [ ! -f youtube-20.21.37.apk ]; then
+          if [ ! -f "${OUTPUT_FILE}" ]; then
             echo "✗ Failed to download APK"
             exit 1
           fi
           
-          FILE_SIZE=$(stat -c%s youtube-20.21.37.apk 2>/dev/null || stat -f%z youtube-20.21.37.apk 2>/dev/null)
-          if [ "$FILE_SIZE" -lt 1000000 ]; then
-            echo "✗ Downloaded file too small ($FILE_SIZE bytes)"
+          FILE_SIZE=$(stat -c%s "${OUTPUT_FILE}" 2>/dev/null || stat -f%z "${OUTPUT_FILE}" 2>/dev/null)
+          echo "Downloaded size: $FILE_SIZE bytes"
+          
+          if [ "$FILE_SIZE" -lt 10000000 ]; then
+            echo "✗ Downloaded file too small ($FILE_SIZE bytes) - might be error page"
+            
+            # Debug: cek apa file download
+            echo "File type:"
+            file "${OUTPUT_FILE}"
+            
             exit 1
           fi
           
           echo "✓ YouTube v20.21.37 downloaded"
-          ls -lh youtube-20.21.37.apk
+          ls -lh "${OUTPUT_FILE}"
       
       # Verify APK is valid
       - name: Verify YouTube APK
@@ -70,6 +96,8 @@ jobs:
             echo "✓ APK is valid ZIP/APK file"
           else
             echo "✗ APK is corrupted or invalid"
+            echo "Checking file header..."
+            xxd -l 100 youtube-20.21.37.apk
             exit 1
           fi
       
@@ -121,4 +149,5 @@ jobs:
         run: |
           rm -f youtube-20.21.37.apk
           rm -f youtube-20.21.37-patched.apk
+          rm -f /tmp/cookies.txt
           echo "✓ Cleanup completed"
