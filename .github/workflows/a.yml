@@ -19,6 +19,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      # Install gdown
+      - name: Install gdown
+        run: |
+          pip install gdown
+          echo "✓ gdown installed"
+      
       # Download morphe-cli
       - name: Download morphe-cli
         run: |
@@ -39,33 +50,16 @@ jobs:
           echo "✓ Morphe patches downloaded"
           ls -lh patches.mpp
       
-      # Download YouTube APK versi 20.21.37 dari Google Drive (file besar)
+      # Download YouTube APK versi 20.21.37 dari Google Drive menggunakan gdown
       - name: Download YouTube APK v20.21.37 from Google Drive
         run: |
-          echo "Downloading YouTube v20.21.37 from Google Drive..."
+          echo "Downloading YouTube v20.21.37 from Google Drive using gdown..."
           
           GDRIVE_ID="16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW"
           OUTPUT_FILE="youtube-20.21.37.apk"
           
-          # Method 1: Gunakan curl dengan cookie handling untuk Google Drive
-          curl -L \
-            -b /tmp/cookies.txt -c /tmp/cookies.txt \
-            "https://docs.google.com/uc?export=download&id=${GDRIVE_ID}" \
-            -o "${OUTPUT_FILE}" \
-            --progress-bar
-          
-          # Jika download gagal, coba method 2
-          if [ ! -f "${OUTPUT_FILE}" ] || [ ! -s "${OUTPUT_FILE}" ]; then
-            echo "Method 1 failed, trying method 2..."
-            
-            # Method 2: Gunakan wget dengan custom headers
-            wget --header="Authorization: Bearer" \
-              --no-check-certificate \
-              --no-verbose \
-              --show-progress \
-              -O "${OUTPUT_FILE}" \
-              "https://docs.google.com/uc?export=download&confirm=9iBg&id=${GDRIVE_ID}"
-          fi
+          # Download menggunakan gdown
+          gdown --id ${GDRIVE_ID} -O ${OUTPUT_FILE} --quiet
           
           # Verify download
           if [ ! -f "${OUTPUT_FILE}" ]; then
@@ -74,46 +68,44 @@ jobs:
           fi
           
           FILE_SIZE=$(stat -c%s "${OUTPUT_FILE}" 2>/dev/null || stat -f%z "${OUTPUT_FILE}" 2>/dev/null)
-          echo "Downloaded size: $FILE_SIZE bytes"
+          echo "Downloaded size: $(numfmt --to=iec $FILE_SIZE 2>/dev/null || echo $FILE_SIZE bytes)"
           
           if [ "$FILE_SIZE" -lt 10000000 ]; then
-            echo "✗ Downloaded file too small ($FILE_SIZE bytes) - might be error page"
-            
-            # Debug: cek apa file download
-            echo "File type:"
-            file "${OUTPUT_FILE}"
-            
+            echo "✗ Downloaded file too small ($FILE_SIZE bytes)"
             exit 1
           fi
           
-          echo "✓ YouTube v20.21.37 downloaded"
+          echo "✓ YouTube v20.21.37 downloaded successfully"
           ls -lh "${OUTPUT_FILE}"
       
       # Verify APK is valid
       - name: Verify YouTube APK
         run: |
+          echo "Verifying APK integrity..."
           if unzip -t youtube-20.21.37.apk > /dev/null 2>&1; then
-            echo "✓ APK is valid ZIP/APK file"
+            echo "✓ APK is valid and intact"
           else
             echo "✗ APK is corrupted or invalid"
-            echo "Checking file header..."
-            xxd -l 100 youtube-20.21.37.apk
             exit 1
           fi
       
-      # List available patches (optional, untuk info)
+      # List available patches
       - name: List Available Patches
         run: |
-          java -jar tools/morphe-cli.jar list-patches patches/patches.mpp | head -20
+          echo "Available patches:"
+          java -jar tools/morphe-cli.jar list-patches patches/patches.mpp | head -30
       
       # Patch YouTube dengan default settings + strip libs armv7 only
-      - name: Patch YouTube v20.21.37 with Default Patches (armv7 only)
+      - name: Patch YouTube v20.21.37 (armv7 only)
         run: |
+          echo "Starting patching process..."
           java -jar tools/morphe-cli.jar patch \
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
             youtube-20.21.37.apk \
             --output youtube-20.21.37-patched.apk
+          
+          echo "✓ Patching completed"
       
       # Verify Patched APK
       - name: Verify Patched APK
@@ -121,11 +113,11 @@ jobs:
           if [ -f youtube-20.21.37-patched.apk ]; then
             echo "✓ Patched APK created successfully"
             SIZE=$(ls -lh youtube-20.21.37-patched.apk | awk '{print $5}')
-            echo "  Size: $SIZE"
+            echo "  Output size: $SIZE"
             
             # Verify it's a valid APK
             if unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1; then
-              echo "✓ Patched APK is valid"
+              echo "✓ Patched APK is valid and intact"
             else
               echo "✗ Patched APK is corrupted"
               exit 1
@@ -142,6 +134,20 @@ jobs:
           name: youtube-20.21.37-patched-armv7
           path: youtube-20.21.37-patched.apk
           retention-days: 30
+          if-no-files-found: error
+      
+      # Summary
+      - name: Summary
+        if: success()
+        run: |
+          echo "=========================================="
+          echo "✓ Build Completed Successfully!"
+          echo "=========================================="
+          echo ""
+          echo "Output APK: youtube-20.21.37-patched.apk"
+          ls -lh youtube-20.21.37-patched.apk
+          echo ""
+          echo "Available in: Artifacts"
       
       # Cleanup
       - name: Cleanup
@@ -149,5 +155,4 @@ jobs:
         run: |
           rm -f youtube-20.21.37.apk
           rm -f youtube-20.21.37-patched.apk
-          rm -f /tmp/cookies.txt
           echo "✓ Cleanup completed"
