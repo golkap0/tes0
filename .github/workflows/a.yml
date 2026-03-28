@@ -24,11 +24,13 @@ jobs:
         with:
           python-version: '3.10'
       
-      # Install gdown
-      - name: Install gdown
+      # Install gdown dan dependencies lainnya
+      - name: Install gdown and dependencies
         run: |
           pip install gdown
-          echo "✓ gdown installed"
+          sudo apt-get update
+          sudo apt-get install -y apktool
+          echo "✓ Dependencies installed"
       
       # Download morphe-cli
       - name: Download morphe-cli
@@ -128,12 +130,83 @@ jobs:
             exit 1
           fi
       
+      # Rename package name menjadi com.youtube.morphe
+      - name: Rename Package to com.youtube.morphe
+        run: |
+          echo "Renaming package: com.google.android.youtube → com.youtube.morphe"
+          
+          # Buat directory kerja
+          mkdir -p apk_work
+          cd apk_work
+          
+          # Copy APK ke working directory
+          cp ../youtube-20.21.37-patched.apk youtube-patched.apk
+          
+          # Decompile APK
+          apktool d youtube-patched.apk -o youtube-src -f
+          
+          # Rename package di AndroidManifest.xml
+          sed -i 's/com\.google\.android\.youtube/com.youtube.morphe/g' youtube-src/AndroidManifest.xml
+          
+          # Rename package di smali files
+          if [ -d "youtube-src/smali" ]; then
+            find youtube-src/smali -type f -name "*.smali" -exec sed -i 's/Lcom\/google\/android\/youtube/Lcom\/youtube\/morphe/g' {} \;
+          fi
+          
+          # Rename directories
+          if [ -d "youtube-src/smali/com/google/android/youtube" ]; then
+            mkdir -p youtube-src/smali/com/youtube/morphe
+            mv youtube-src/smali/com/google/android/youtube/* youtube-src/smali/com/youtube/morphe/ 2>/dev/null || true
+            rm -rf youtube-src/smali/com/google 2>/dev/null || true
+          fi
+          
+          # Rebuild APK
+          apktool b youtube-src -o youtube-renamed.apk
+          
+          # Copy hasil ke parent directory
+          cp youtube-renamed.apk ../youtube-20.21.37-patched-morphe.apk
+          
+          echo "✓ Package renamed successfully"
+          cd ..
+          ls -lh youtube-20.21.37-patched-morphe.apk
+      
+      # Re-sign APK setelah rename
+      - name: Sign Renamed APK
+        run: |
+          echo "Signing renamed APK..."
+          
+          # Generate keystore jika belum ada
+          if [ ! -f morphe.keystore ]; then
+            keytool -genkey -v -keystore morphe.keystore \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -alias morphe -storepass morphe123 -keypass morphe123 \
+              -dname "CN=Morphe,O=Morphe,L=Indonesia,ST=ID,C=ID"
+          fi
+          
+          # Sign APK menggunakan jarsigner
+          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
+            -keystore morphe.keystore -storepass morphe123 \
+            youtube-20.21.37-patched-morphe.apk morphe
+          
+          echo "✓ APK signed successfully"
+      
+      # Verify renamed APK
+      - name: Verify Renamed APK
+        run: |
+          if unzip -t youtube-20.21.37-patched-morphe.apk > /dev/null 2>&1; then
+            echo "✓ Renamed APK is valid"
+            ls -lh youtube-20.21.37-patched-morphe.apk
+          else
+            echo "✗ Renamed APK is corrupted"
+            exit 1
+          fi
+      
       # Upload HANYA ke Artifact (NO Release)
       - name: Upload Patched APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-20.21.37-patched-armv7
-          path: youtube-20.21.37-patched.apk
+          name: youtube-morphe-patched
+          path: youtube-20.21.37-patched-morphe.apk
           retention-days: 30
           if-no-files-found: error
       
@@ -145,8 +218,10 @@ jobs:
           echo "✓ Build Completed Successfully!"
           echo "=========================================="
           echo ""
-          echo "Output APK: youtube-20.21.37-patched.apk"
-          ls -lh youtube-20.21.37-patched.apk
+          echo "Package: com.youtube.morphe"
+          echo "Version: 20.21.37"
+          echo "Output APK: youtube-20.21.37-patched-morphe.apk"
+          ls -lh youtube-20.21.37-patched-morphe.apk
           echo ""
           echo "Available in: Artifacts"
       
@@ -154,6 +229,8 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
+          rm -rf apk_work
           rm -f youtube-20.21.37.apk
           rm -f youtube-20.21.37-patched.apk
+          rm -f morphe.keystore
           echo "✓ Cleanup completed"
