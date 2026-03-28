@@ -1,0 +1,100 @@
+name: Auto Patch YouTube v20.21.37 (Pre-release MPP)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch-youtube:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install gdown
+        run: |
+          pip install gdown
+          echo "✓ gdown installed"
+      
+      - name: Download morphe-cli
+        run: |
+          mkdir -p tools
+          cd tools
+          # Mengambil CLI terbaru
+          MORPHE_CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          wget -O morphe-cli.jar "$MORPHE_CLI_URL"
+          echo "✓ morphe-cli downloaded"
+      
+      # MODIFIKASI DI SINI: Mengambil .mpp dari Pre-release terbaru
+      - name: Download Morphe Patches (Pre-release)
+        run: |
+          mkdir -p patches
+          cd patches
+          echo "Searching for latest Pre-release MPP..."
+          # Menggunakan /releases (tanpa /latest) untuk mendapatkan daftar semua rilis termasuk pre-release
+          # Kemudian mengambil asset .mpp dari rilis paling atas (terbaru)
+          PATCHES_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-patches/releases | jq -r '.[0].assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+          
+          if [ -z "$PATCHES_URL" ] || [ "$PATCHES_URL" == "null" ]; then
+            echo "✗ Failed to find .mpp file in latest releases"
+            exit 1
+          fi
+          
+          wget -O patches.mpp "$PATCHES_URL"
+          echo "✓ Morphe patches (Pre-release) downloaded from: $PATCHES_URL"
+          ls -lh patches.mpp
+      
+      - name: Download YouTube APK v20.21.37 from Google Drive
+        run: |
+          GDRIVE_ID="16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW"
+          OUTPUT_FILE="youtube-20.21.37.apk"
+          gdown --id ${GDRIVE_ID} -O ${OUTPUT_FILE} --quiet
+          
+          if [ ! -f "${OUTPUT_FILE}" ]; then exit 1; fi
+          echo "✓ YouTube v20.21.37 downloaded"
+      
+      - name: Verify YouTube APK
+        run: |
+          unzip -t youtube-20.21.37.apk > /dev/null 2>&1 || exit 1
+          echo "✓ APK is valid"
+      
+      - name: Patch YouTube v20.21.37 (armv7 only)
+        run: |
+          # Ditambahkan --continue-on-error agar tetap lanjut jika ada fitur layout yang gagal (seperti log sebelumnya)
+          java -jar tools/morphe-cli.jar patch \
+            --patches patches/patches.mpp \
+            --striplibs armeabi-v7a \
+            --continue-on-error \
+            youtube-20.21.37.apk \
+            --out youtube-20.21.37-patched.apk
+          echo "✓ Patching completed"
+      
+      - name: Verify Patched APK
+        run: |
+          if [ -f youtube-20.21.37-patched.apk ]; then
+            unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1 || exit 1
+            echo "✓ Patched APK is valid"
+          else
+            exit 1
+          fi
+      
+      - name: Upload Patched APK to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-20.21.37-mpp-prerelease-armv7
+          path: youtube-20.21.37-patched.apk
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        run: rm -f youtube-20.21.37.apk youtube-20.21.37-patched.apk
