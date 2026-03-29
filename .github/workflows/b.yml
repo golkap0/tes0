@@ -41,7 +41,7 @@ jobs:
       # Step ini krusial: Decode ke file .p12
       - name: Prepare Custom Key
         run: |
-          echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.p12
+          echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
       
       - name: Patch YouTube
         run: |
@@ -49,7 +49,7 @@ jobs:
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
             --continue-on-error \
-            --keystore my-release-key.p12 \
+            --keystore my-release-key.keystore \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
             --keystore-entry-alias "fas" \
             --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
