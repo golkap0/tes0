@@ -1,7 +1,7 @@
-name: Auto Patch YouTube v20.21.37
+name: Auto Patch YouTube v20.21.37 (Latest MPP)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Hanya dijalankan manual
 
 jobs:
   patch-youtube:
@@ -21,88 +21,54 @@ jobs:
         with:
           python-version: '3.10'
       
-      # Install gdown
       - name: Install gdown
         run: |
           pip install gdown
           echo "✓ gdown installed"
       
-      # Download morphe-cli
+      # Download morphe-cli terbaru
       - name: Download morphe-cli
         run: |
           mkdir -p tools
-          cd tools
           MORPHE_CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
-          wget -O morphe-cli.jar "$MORPHE_CLI_URL"
+          wget -O tools/morphe-cli.jar "$MORPHE_CLI_URL"
           echo "✓ morphe-cli downloaded"
-          ls -lh morphe-cli.jar
       
-      # Download patches
-      - name: Download Morphe Patches
+      # Download patches VERSI STABIL TERBARU (Latest)
+      - name: Download Morphe Patches (Latest)
         run: |
           mkdir -p patches
-          cd patches
           PATCHES_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
-          wget -O patches.mpp "$PATCHES_URL"
-          echo "✓ Morphe patches downloaded"
-          ls -lh patches.mpp
+          wget -O patches/patches.mpp "$PATCHES_URL"
+          echo "✓ Morphe patches (Latest) downloaded"
       
-      # Download YouTube APK versi 20.21.37 dari Google Drive menggunakan gdown
+      # Download YouTube APK v20.21.37
       - name: Download YouTube APK v20.21.37 from Google Drive
         run: |
-          echo "Downloading YouTube v20.21.37 from Google Drive using gdown..."
-          
           GDRIVE_ID="16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW"
-          OUTPUT_FILE="youtube-20.21.37.apk"
-          
-          # Download menggunakan gdown
-          gdown --id ${GDRIVE_ID} -O ${OUTPUT_FILE} --quiet
-          
-          # Verify download
-          if [ ! -f "${OUTPUT_FILE}" ]; then
-            echo "✗ Failed to download APK"
-            exit 1
-          fi
-          
-          FILE_SIZE=$(stat -c%s "${OUTPUT_FILE}" 2>/dev/null || stat -f%z "${OUTPUT_FILE}" 2>/dev/null)
-          echo "Downloaded size: $(numfmt --to=iec $FILE_SIZE 2>/dev/null || echo $FILE_SIZE bytes)"
-          
-          if [ "$FILE_SIZE" -lt 10000000 ]; then
-            echo "✗ Downloaded file too small ($FILE_SIZE bytes)"
-            exit 1
-          fi
-          
-          echo "✓ YouTube v20.21.37 downloaded successfully"
-          ls -lh "${OUTPUT_FILE}"
+          gdown --id ${GDRIVE_ID} -O youtube-20.21.37.apk --quiet
+          echo "✓ YouTube v20.21.37 downloaded"
       
-      # Verify APK is valid
-      - name: Verify YouTube APK
+      # Decode Custom Keystore dari GitHub Secrets
+      - name: Prepare Custom Key
         run: |
-          echo "Verifying APK integrity..."
-          if unzip -t youtube-20.21.37.apk > /dev/null 2>&1; then
-            echo "✓ APK is valid and intact"
-          else
-            echo "✗ APK is corrupted or invalid"
-            exit 1
-          fi
+          echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
+          echo "✓ Custom Keystore prepared"
       
-      # List available patches
-      - name: List Available Patches
-        run: |
-          echo "Available patches:"
-          java -jar tools/morphe-cli.jar list-patches patches/patches.mpp | head -30
-      
-      # Patch YouTube dengan default settings + strip libs armv7 only
-      - name: Patch YouTube v20.21.37 (armv7 only)
+      # Proses Patching dengan Custom Key & Armv7 Only
+      - name: Patch YouTube v20.21.37
         run: |
           echo "Starting patching process..."
           java -jar tools/morphe-cli.jar patch \
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
             --continue-on-error \
+            --keystore my-release-key.keystore \
+            --keystore-password "${{ secrets.MY_KEY_PASS }}" \
+            --keystore-entry-alias "fas" \
+            --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
             youtube-20.21.37.apk \
             --out youtube-20.21.37-patched.apk
-          
           echo "✓ Patching completed"
       
       # Verify Patched APK
@@ -110,10 +76,6 @@ jobs:
         run: |
           if [ -f youtube-20.21.37-patched.apk ]; then
             echo "✓ Patched APK created successfully"
-            SIZE=$(ls -lh youtube-20.21.37-patched.apk | awk '{print $5}')
-            echo "  Output size: $SIZE"
-            
-            # Verify it's a valid APK
             if unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1; then
               echo "✓ Patched APK is valid and intact"
             else
@@ -121,36 +83,22 @@ jobs:
               exit 1
             fi
           else
-            echo "✗ Patching failed - APK not created"
+            echo "✗ Patching failed"
             exit 1
           fi
       
-      # Upload HANYA ke Artifact (NO Release)
+      # Upload ke Artifacts
       - name: Upload Patched APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-20.21.37-patched-armv7
+          name: youtube-20.21.37-latest-mpp-signed
           path: youtube-20.21.37-patched.apk
-          retention-days: 30
-          if-no-files-found: error
-      
-      # Summary
-      - name: Summary
-        if: success()
-        run: |
-          echo "=========================================="
-          echo "✓ Build Completed Successfully!"
-          echo "=========================================="
-          echo ""
-          echo "Output APK: youtube-20.21.37-patched.apk"
-          ls -lh youtube-20.21.37-patched.apk
-          echo ""
-          echo "Available in: Artifacts"
+          retention-days: 7
       
       # Cleanup
       - name: Cleanup
         if: always()
         run: |
-          rm -f youtube-20.21.37.apk
-          rm -f youtube-20.21.37-patched.apk
+          rm -f *.apk
+          rm -f *.keystore
           echo "✓ Cleanup completed"
