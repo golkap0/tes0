@@ -55,6 +55,7 @@ jobs:
           echo "✓ Keystore prepared"
       
       # 5. Proses Patching dengan Custom Key & Armv7 Only
+      # 5. Proses Patching dengan Parameter yang diperbaiki
       - name: Patch YouTube v20.21.37
         run: |
           java -jar tools/morphe-cli.jar patch \
@@ -63,11 +64,11 @@ jobs:
             --continue-on-error \
             --keystore my-release-key.jks \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
-            --keystore-alias "fas" \
+            --keystore-entry-alias "fas" \
+            --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
             youtube-20.21.37.apk \
             --out youtube-20.21.37-patched.apk
-          echo "✓ Patching completed"
-      
+          echo "✓ Patching completed"      
       # 6. Verifikasi hasil build
       - name: Verify Patched APK
         run: |
