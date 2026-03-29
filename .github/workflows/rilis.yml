@@ -1,0 +1,93 @@
+name: Auto Patch YouTube v20.21.37 (Release with Changelog)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch-youtube:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write 
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install gdown
+        run: pip install gdown
+      
+      # Step untuk mengambil Tag, Changelog, dan Download MPP
+      - name: Fetch Latest MPP Info & Download
+        id: mpp_info
+        run: |
+          mkdir -p tools patches
+          # Ambil data JSON dari rilis terbaru
+          RESPONSE=$(curl -s https://api.github.com/repos/MorpheApp/morphe-patches/releases/latest)
+          
+          # Ambil Tag dan Body (Changelog)
+          MPP_TAG=$(echo "$RESPONSE" | jq -r '.tag_name')
+          MPP_BODY=$(echo "$RESPONSE" | jq -r '.body')
+          PATCHES_URL=$(echo "$RESPONSE" | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+          
+          # Simpan ke file sementara untuk menghindari masalah karakter aneh di variabel shell
+          echo "$MPP_BODY" > changelog.txt
+          
+          # Download MPP
+          wget -O patches/patches.mpp "$PATCHES_URL"
+          
+          # Simpan output untuk digunakan di step berikutnya
+          echo "tag=$MPP_TAG" >> $GITHUB_OUTPUT
+          echo "✓ MPP Tag: $MPP_TAG"
+      
+      - name: Download morphe-cli
+        run: |
+          CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          wget -O tools/morphe-cli.jar "$CLI_URL"
+
+      - name: Download YouTube APK
+        run: |
+          gdown --id "16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW" -O youtube.apk --quiet
+      
+      - name: Prepare Custom Key
+        run: |
+          echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
+      
+      - name: Patch YouTube
+        run: |
+          java -jar tools/morphe-cli.jar patch \
+            --patches patches/patches.mpp \
+            --striplibs armeabi-v7a \
+            --continue-on-error \
+            --keystore my-release-key.keystore \
+            --keystore-password "${{ secrets.MY_KEY_PASS }}" \
+            --keystore-entry-alias "fas" \
+            --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
+            youtube.apk \
+            --out youtube-20.21.37-patched.apk
+
+      # Create GitHub Release dengan Body dari MPP
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "patch-${{ steps.mpp_info.outputs.tag }}"
+          name: "YouTube v20.21.37 (MPP ${{ steps.mpp_info.outputs.tag }})"
+          body_path: changelog.txt # Mengambil isi file changelog.txt sebagai deskripsi rilis
+          files: youtube-20.21.37-patched.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup
+        if: always()
+        run: rm -f *.apk *.keystore changelog.txt
