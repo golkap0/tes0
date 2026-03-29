@@ -1,4 +1,4 @@
-name: Auto Patch YouTube v20.21.37 (Pre-release)
+name: Auto Patch YouTube v20.21.37 (BKS Keystore)
 
 on:
   workflow_dispatch:
@@ -27,21 +27,23 @@ jobs:
       - name: Download tools & patches
         run: |
           mkdir -p tools patches
-          # CLI
+          # Download CLI terbaru
           CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
           wget -O tools/morphe-cli.jar "$CLI_URL"
-          # MPP Pre-release
+          # Download MPP Pre-release terbaru (indeks [0])
           PATCHES_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-patches/releases | jq -r '.[0].assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
           wget -O patches/patches.mpp "$PATCHES_URL"
 
       - name: Download YouTube APK
         run: |
           gdown --id "16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW" -O youtube.apk --quiet
+          echo "✓ YouTube APK downloaded"
       
-      # Step ini krusial: Decode ke file .p12
-      - name: Prepare Custom Key
+      # Step ini mengubah teks Base64 kembali menjadi file .keystore asli kamu
+      - name: Prepare Custom Keystore
         run: |
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
+          echo "✓ Keystore file restored"
       
       - name: Patch YouTube
         run: |
@@ -54,15 +56,15 @@ jobs:
             --keystore-entry-alias "fas" \
             --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
             youtube.apk \
-            --out youtube-patched.apk
+            --out youtube-20.21.37-patched.apk
 
       - name: Upload Patched APK
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-v20.21.37-armv7-signed
-          path: youtube-patched.apk
+          name: youtube-v20.21.37-signed-bks
+          path: youtube-20.21.37-patched.apk
           retention-days: 7
 
       - name: Cleanup
         if: always()
-        run: rm -f *.apk *.p12 *.jks
+        run: rm -f *.apk *.keystore
