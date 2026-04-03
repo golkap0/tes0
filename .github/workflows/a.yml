@@ -1,11 +1,13 @@
-name: Auto Patch YouTube latest release
+name: Auto Patch YouTube Latest Release
 
 on:
-  workflow_dispatch: # Hanya dijalankan manual
+  workflow_dispatch: # Jalankan manual dari tab Actions
 
 jobs:
   patch-youtube:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Wajib untuk membuat GitHub Release
     
     steps:
       - uses: actions/checkout@v4
@@ -21,42 +23,45 @@ jobs:
         with:
           python-version: '3.10'
       
-      - name: Install gdown
+      - name: Install Tools
         run: |
           pip install gdown
-          echo "✓ gdown installed"
+          sudo apt-get install p7zip-full -y
+          echo "✓ Tools installed"
       
-      # Download morphe-cli terbaru
+      # Ambil Info MPP Latest, Changelog, dan Download .mpp
+      - name: Fetch Latest MPP Info & Download
+        id: mpp_info
+        run: |
+          mkdir -p tools patches
+          RESPONSE=$(curl -s https://api.github.com/repos/MorpheApp/morphe-patches/releases/latest)
+          MPP_TAG=$(echo "$RESPONSE" | jq -r '.tag_name')
+          MPP_BODY=$(echo "$RESPONSE" | jq -r '.body')
+          PATCHES_URL=$(echo "$RESPONSE" | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+          
+          echo "$MPP_BODY" > changelog.txt
+          wget -O patches/patches.mpp "$PATCHES_URL"
+          
+          echo "tag=$MPP_TAG" >> $GITHUB_OUTPUT
+          echo "✓ Using Morphe Patches version: $MPP_TAG"
+      
       - name: Download morphe-cli
         run: |
-          mkdir -p tools
-          MORPHE_CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
-          wget -O tools/morphe-cli.jar "$MORPHE_CLI_URL"
+          CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          wget -O tools/morphe-cli.jar "$CLI_URL"
           echo "✓ morphe-cli downloaded"
       
-      # Download patches VERSI STABIL TERBARU (Latest)
-      - name: Download Morphe Patches (Latest)
+      - name: Download YouTube APK
         run: |
-          mkdir -p patches
-          PATCHES_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
-          wget -O patches/patches.mpp "$PATCHES_URL"
-          echo "✓ Morphe patches (Latest) downloaded"
-      
-      # Download YouTube APK v20.21.37
-      - name: Download YouTube APK v20.21.37 from Google Drive
-        run: |
-          GDRIVE_ID="16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW"
-          gdown --id ${GDRIVE_ID} -O youtube-20.21.37.apk --quiet
+          gdown --id "16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW" -O youtube-20.21.37.apk --quiet
           echo "✓ YouTube v20.21.37 downloaded"
       
-      # Decode Custom Keystore dari GitHub Secrets
       - name: Prepare Custom Key
         run: |
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
           echo "✓ Custom Keystore prepared"
       
-      # Proses Patching dengan Custom Key & Armv7 Only
-      - name: Patch YouTube v20.21.37
+      - name: Patch YouTube
         run: |
           echo "Starting patching process..."
           java -jar tools/morphe-cli.jar patch \
@@ -72,34 +77,42 @@ jobs:
             --out youtube-20.21.37-patched.apk
           echo "✓ Patching completed"
       
-      # Verify Patched APK
       - name: Verify Patched APK
         run: |
-          if [ -f youtube-20.21.37-patched.apk ]; then
-            echo "✓ Patched APK created successfully"
-            if unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1; then
-              echo "✓ Patched APK is valid and intact"
-            else
-              echo "✗ Patched APK is corrupted"
-              exit 1
-            fi
+          if [ -f youtube-20.21.37-patched.apk ] && unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1; then
+            echo "✓ Patched APK is valid"
           else
-            echo "✗ Patching failed"
+            echo "✗ Patching failed or APK corrupted"
             exit 1
           fi
-      
-      # Upload ke Artifacts
-      - name: Upload Patched APK to Artifacts
-        uses: actions/upload-artifact@v4
+
+      # Kompresi Ultra agar ukuran file kecil saat didownload
+      - name: Ultra Compression (7z)
+        run: |
+          7z a -tzip -mx=9 -m0=lzma2 youtube-v20.21.37-ultra.zip youtube-20.21.37-patched.apk
+          echo "✓ Ultra compression completed"
+          ls -lh youtube-v20.21.37-ultra.zip
+
+      # Upload ke GitHub Release dengan Info MPP Latest
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: youtube-20.21.37-latest-mpp-signed
-          path: youtube-20.21.37-patched.apk
-          retention-days: 7
-      
-      # Cleanup
+          tag_name: "patch-${{ steps.mpp_info.outputs.tag }}"
+          name: "YouTube v20.21.37 (MPP ${{ steps.mpp_info.outputs.tag }})"
+          body_path: changelog.txt
+          files: |
+            youtube-20.21.37-patched.apk
+            youtube-v20.21.37-ultra.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Cleanup
         if: always()
         run: |
           rm -f *.apk
           rm -f *.keystore
+          rm -f *.zip
+          rm -f changelog.txt
           echo "✓ Cleanup completed"
