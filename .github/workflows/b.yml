@@ -1,4 +1,4 @@
-name: Auto Patch YouTube b
+name: Auto Patch YouTube patch latest
 
 on:
   workflow_dispatch:
