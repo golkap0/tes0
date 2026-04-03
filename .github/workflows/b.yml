@@ -51,6 +51,7 @@ jobs:
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
             --continue-on-error \
+            --disable "Custom branding" \
             --keystore my-release-key.keystore \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
             --keystore-entry-alias "fas" \
