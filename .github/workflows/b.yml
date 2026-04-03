@@ -1,4 +1,4 @@
-name: Auto Patch YouTube v20.21.37 (BKS Keystore)
+name: Auto Patch YouTube b
 
 on:
   workflow_dispatch:
@@ -51,7 +51,7 @@ jobs:
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
             --continue-on-error \
-            --d "Custom branding" \
+            -d "Custom branding" \
             --keystore my-release-key.keystore \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
             --keystore-entry-alias "fas" \
