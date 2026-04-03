@@ -1,7 +1,7 @@
-name: Auto Patch YouTube Latest Release
+name: Auto Patch YouTube latest release
 
 on:
-  workflow_dispatch: # Jalankan manual dari tab Actions
+  workflow_dispatch: # Hanya dijalankan manual
 
 jobs:
   patch-youtube:
@@ -21,20 +21,19 @@ jobs:
         with:
           python-version: '3.10'
       
-      - name: Install Tools
+      - name: Install gdown
         run: |
           pip install gdown
-          sudo apt-get install p7zip-full -y
-          echo "✓ Tools installed"
+          echo "✓ gdown installed"
       
       # Download morphe-cli terbaru
       - name: Download morphe-cli
         run: |
           mkdir -p tools
-          CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
-          wget -O tools/morphe-cli.jar "$CLI_URL"
+          MORPHE_CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          wget -O tools/morphe-cli.jar "$MORPHE_CLI_URL"
           echo "✓ morphe-cli downloaded"
-
+      
       # Download patches VERSI STABIL TERBARU (Latest)
       - name: Download Morphe Patches (Latest)
         run: |
@@ -56,7 +55,7 @@ jobs:
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
           echo "✓ Custom Keystore prepared"
       
-      # Proses Patching dengan Custom Key & Armv7 Only (Disable Branding)
+      # Proses Patching dengan Custom Key & Armv7 Only
       - name: Patch YouTube v20.21.37
         run: |
           echo "Starting patching process..."
@@ -73,24 +72,29 @@ jobs:
             --out youtube-20.21.37-patched.apk
           echo "✓ Patching completed"
       
-      # Kompresi Ultra agar ukuran file sangat kecil di Artifacts
-      # Kompresi Ultra menggunakan Deflate standar (paling kompatibel untuk .zip)
-      - name: Ultra Compression (7z)
+      # Verify Patched APK
+      - name: Verify Patched APK
         run: |
-          # mx=9: Kompresi level Ultra
-          # m0=deflate: Metode standar ZIP yang paling kompatibel
-          7z a -tzip -mx=9 -m0=deflate youtube-v20.21.37-ultra.zip youtube-20.21.37-patched.apk
-          echo "✓ Ultra compression completed"
-          ls -lh youtube-v20.21.37-ultra.zip
-
-      # Upload ke Actions Artifacts (Bisa download file .apk atau .zip)
-      - name: Upload to Actions Artifacts
+          if [ -f youtube-20.21.37-patched.apk ]; then
+            echo "✓ Patched APK created successfully"
+            if unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1; then
+              echo "✓ Patched APK is valid and intact"
+            else
+              echo "✗ Patched APK is corrupted"
+              exit 1
+            fi
+          else
+            echo "✗ Patching failed"
+            exit 1
+          fi
+      
+      # Upload ke Artifacts - DIUBAH MENJADI 1 HARI
+      - name: Upload Patched APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-v20.21.37-patched-files
-          path: |
-            youtube-v20.21.37-ultra.zip
-          retention-days: 7
+          name: youtube-20.21.37-latest-mpp-signed
+          path: youtube-20.21.37-patched.apk
+          retention-days: 1
       
       # Cleanup
       - name: Cleanup
@@ -98,5 +102,4 @@ jobs:
         run: |
           rm -f *.apk
           rm -f *.keystore
-          rm -f *.zip
           echo "✓ Cleanup completed"
