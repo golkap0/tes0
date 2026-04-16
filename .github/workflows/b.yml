@@ -36,7 +36,7 @@ jobs:
 
       - name: Download YouTube APK
         run: |
-          gdown --id "16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW" -O youtube.apk --quiet
+          gdown --id "16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW" -O youtube.apk
           echo "✓ YouTube APK downloaded"
       
       # Step ini mengubah teks Base64 kembali menjadi file .keystore asli kamu
