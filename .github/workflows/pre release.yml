@@ -62,7 +62,7 @@ jobs:
       - name: Upload Patched APK
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-v20.21.37-signed-bks
+          name: youtube-v20.21.37-signed
           path: youtube-20.21.37-patched.apk
           retention-days: 7
 
