@@ -1,0 +1,96 @@
+name: Build Cromite ARMv7a (Chromium 128 + Latest Patches)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # PERINGATAN: Harus menggunakan self-hosted runner jika tidak ingin kena limit 6 jam/disk space
+    runs-on: ubuntu-latest 
+
+    steps:
+      - name: Free Disk Space (Kritis)
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo docker image prune --all --force
+
+      - name: Install Depot Tools
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git
+          echo "$GITHUB_WORKSPACE/depot_tools" >> $GITHUB_PATH
+
+      - name: Fetch Chromium v128
+        run: |
+          export PATH="$PATH:$GITHUB_WORKSPACE/depot_tools"
+          mkdir chromium && cd chromium
+          fetch --nohooks android
+          cd src
+          # Mengunci ke versi 128 spesifik
+          git checkout tags/128.0.6613.119
+          gclient sync -D --force --reset --no-history
+
+      - name: Clone Latest Cromite Patches
+        run: |
+          # Mengambil patch terbaru dari branch main Cromite
+          git clone --depth 1 https://github.com/uazo/cromite.git cromite_repo
+
+      - name: Apply Latest Patches to v128
+        run: |
+          cd chromium/src
+          export PATCH_DIR=$GITHUB_WORKSPACE/cromite_repo/build/patches
+          
+          # Cromite menggunakan urutan tertentu dalam patches.txt atau list file
+          # Kita akan mencoba menerapkan semua file .patch yang ada
+          echo "Attempting to apply latest patches to v128..."
+          
+          for p in $(ls $PATCH_DIR/*.patch | sort); do
+            echo "Applying: $(basename $p)"
+            # Menggunakan --reject agar tetap lanjut jika ada satu patch yang gagal
+            # dan --3way untuk mencoba smart merge
+            git apply --3way --ignore-space-change --ignore-whitespace "$p" || echo "FAILED to apply $(basename $p)"
+          done
+
+      - name: Run Cromite Domain Substitution
+        run: |
+          # Ini penting untuk privasi (menghapus domain Google)
+          cd chromium/src
+          python3 $GITHUB_WORKSPACE/cromite_repo/build/substitute_domains.py \
+            --infile $GITHUB_WORKSPACE/cromite_repo/build/domain_substitution.list \
+            --chromium-src .
+
+      - name: GN Configuration (ARMv7a)
+        run: |
+          cd chromium/src
+          export PATH="$PATH:$GITHUB_WORKSPACE/depot_tools"
+          mkdir -p out/Default
+          
+          # Konfigurasi spesifik ARMv7a (32-bit)
+          cat <<EOF > out/Default/args.gn
+          target_os = "android"
+          target_cpu = "arm"
+          is_debug = false
+          is_official_build = true
+          is_component_build = false
+          symbol_level = 0
+          ffmpeg_branding = "Chrome"
+          proprietary_codecs = true
+          enable_nacl = false
+          blink_symbol_level = 0
+          # Flag tambahan untuk performa build
+          disable_fieldtrial_testing_config = true
+          EOF
+          
+          gn gen out/Default
+
+      - name: Compile APK
+        run: |
+          cd chromium/src
+          export PATH="$PATH:$GITHUB_WORKSPACE/depot_tools"
+          # Target APK standar
+          autoninja -C out/Default chrome_public_apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Cromite-v128-ARMv7a
+          path: chromium/src/out/Default/apks/ChromePublic.apk
