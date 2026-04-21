@@ -56,7 +56,7 @@ jobs:
 
       - name: Download YouTube APK
         run: |
-          gdown --id "16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW" -O youtube.apk --quiet
+          gdown "16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW" -O youtube.apk --quiet
       
       - name: Prepare Custom Key
         run: |
