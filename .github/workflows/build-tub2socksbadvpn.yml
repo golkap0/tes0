@@ -1,51 +1,45 @@
-name: Build BadVPN tun2socks (Android NDK)
+name: Build badvpn-tun2socks (armv7)
 
 on:
-  workflow_dispatch: 
+  workflow_dispatch: # Mengizinkan Anda menjalankan build ini secara manual melalui tombol di GitHub
 
 jobs:
-  build-android:
+  build:
+    name: Build tun2socks for Android
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # Build untuk 32-bit (armeabi-v7a) dan 64-bit (arm64-v8a)
-        arch:[armeabi-v7a, arm64-v8a]
-
-    name: Build for Android ${{ matrix.arch }}
 
     steps:
-      - name: Clone BadVPN Repository
-        run: git clone https://github.com/ambrop72/badvpn.git
-
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        id: setup-ndk
+      # 1. Mengunduh source code dari repository badvpn asli
+      - name: Checkout badvpn repository
+        uses: actions/checkout@v4
         with:
-          # Menggunakan NDK versi 25 (stabil)
-          ndk-version: r25c
+          repository: ambrop72/badvpn
+          ref: master
 
-      - name: Compile BadVPN tun2socks with NDK
+      # 2. Proses kompilasi menggunakan Android NDK dan CMake
+      - name: Build with CMake
         run: |
-          cd badvpn
           mkdir build && cd build
-          
-          # Menggunakan toolchain resmi dari Android NDK
           cmake .. \
-            -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
-            -DANDROID_ABI=${{ matrix.arch }} \
+            -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=armeabi-v7a \
             -DANDROID_PLATFORM=android-21 \
+            -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_NOTHING_BY_DEFAULT=1 \
             -DBUILD_TUN2SOCKS=1
-            
           make badvpn-tun2socks
 
-      - name: Prepare Output
+      # 3. Menyiapkan hasil build
+      - name: Prepare output artifact
         run: |
           mkdir -p output
-          find badvpn/build -name "badvpn-tun2socks" -exec cp {} output/badvpn-tun2socks-${{ matrix.arch }} \;
+          # Mencari file executable hasil build
+          # File sengaja di-rename menjadi libtun2socks.so agar kompatibel dengan Android (baca catatan di bawah)
+          find build -name "badvpn-tun2socks" -type f -exec cp {} output/libtun2socks.so \;
 
+      # 4. Mengunggah hasil build agar bisa Anda download
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: badvpn-tun2socks-android-${{ matrix.arch }}
-          path: output/badvpn-tun2socks-${{ matrix.arch }}
+          name: tun2socks-armeabi-v7a
+          path: output/libtun2socks.so
