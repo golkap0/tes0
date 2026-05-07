@@ -1,65 +1,51 @@
-name: Build BadVPN tun2socks (ARMv7)
+name: Build BadVPN tun2socks (Android NDK)
 
 on:
-  # Memungkinkan Anda menjalankan workflow ini secara manual dari tab "Actions"
   workflow_dispatch: 
-  push:
-    branches:
-      - main
 
 jobs:
-  build-armv7:
+  build-android:
     runs-on: ubuntu-latest
-    name: Build for ARMv7
+    strategy:
+      matrix:
+        # Build untuk 32-bit (armeabi-v7a) dan 64-bit (arm64-v8a)
+        arch:[armeabi-v7a, arm64-v8a]
+
+    name: Build for Android ${{ matrix.arch }}
 
     steps:
-      - name: Install Dependencies & Cross-Compiler
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y cmake git gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
-
       - name: Clone BadVPN Repository
-        run: |
-          # Mengambil source code resmi dari ambrop72/badvpn
-          git clone https://github.com/ambrop72/badvpn.git
+        run: git clone https://github.com/ambrop72/badvpn.git
 
-      - name: Compile BadVPN tun2socks
+      - name: Setup Android NDK
+        uses: nttld/setup-ndk@v1
+        id: setup-ndk
+        with:
+          # Menggunakan NDK versi 25 (stabil)
+          ndk-version: r25c
+
+      - name: Compile BadVPN tun2socks with NDK
         run: |
           cd badvpn
           mkdir build && cd build
           
-          # Konfigurasi CMake untuk Cross-Compile ke ARM
-          # BUILD_NOTHING_BY_DEFAULT=1: Mencegah build fitur BadVPN lain agar proses cepat
-          # BUILD_TUN2SOCKS=1: Hanya build tun2socks
+          # Menggunakan toolchain resmi dari Android NDK
           cmake .. \
-            -DCMAKE_SYSTEM_NAME=Linux \
-            -DCMAKE_SYSTEM_PROCESSOR=arm \
-            -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
-            -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
-            -DCMAKE_C_FLAGS="-O3" \
-            -DCMAKE_EXE_LINKER_FLAGS="-static" \
+            -DCMAKE_TOOLCHAIN_FILE=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake \
+            -DANDROID_ABI=${{ matrix.arch }} \
+            -DANDROID_PLATFORM=android-21 \
             -DBUILD_NOTHING_BY_DEFAULT=1 \
             -DBUILD_TUN2SOCKS=1
             
-          # Menjalankan proses kompilasi
           make badvpn-tun2socks
 
-      - name: Strip Binary (Reduce Size)
-        run: |
-          # Menghapus simbol debugging untuk mengecilkan ukuran file biner (cocok untuk router/STB)
-          find badvpn/build -name "badvpn-tun2socks" -exec arm-linux-gnueabihf-strip {} \;
-
-      - name: Prepare Artifact Output
+      - name: Prepare Output
         run: |
           mkdir -p output
-          # Mencari file hasil build dan memindahkannya ke folder output
-          find badvpn/build -name "badvpn-tun2socks" -exec cp {} output/ \;
-          
-          # Verifikasi tipe file untuk memastikan file adalah ARM 32-bit (ARMv7)
-          file output/badvpn-tun2socks
+          find badvpn/build -name "badvpn-tun2socks" -exec cp {} output/badvpn-tun2socks-${{ matrix.arch }} \;
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: badvpn-tun2socks-armv7
-          path: output/badvpn-tun2socks
+          name: badvpn-tun2socks-android-${{ matrix.arch }}
+          path: output/badvpn-tun2socks-${{ matrix.arch }}
