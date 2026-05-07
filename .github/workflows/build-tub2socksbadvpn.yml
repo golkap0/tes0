@@ -71,7 +71,7 @@ jobs:
             -DBUILD_TUN2SOCKS=ON \
             -G Ninja
 
-          ninja tun2socks
+          ninja badvpn-tun2socks
 
       - name: Strip binary
         run: |
