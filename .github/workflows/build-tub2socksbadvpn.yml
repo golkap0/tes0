@@ -1,53 +1,65 @@
-name: Build tun2socks (BadVPN) for armv7
+name: Build BadVPN tun2socks (ARMv7)
 
 on:
-  workflow_dispatch:          # bisa dijalankan manual dari tab Actions
+  # Memungkinkan Anda menjalankan workflow ini secara manual dari tab "Actions"
+  workflow_dispatch: 
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04
+  build-armv7:
+    runs-on: ubuntu-latest
+    name: Build for ARMv7
+
     steps:
-      - name: Install toolchain
+      - name: Install Dependencies & Cross-Compiler
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabi cmake make file
+          sudo apt-get install -y cmake git gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf binutils-arm-linux-gnueabihf
 
-      - name: Clone BadVPN
+      - name: Clone BadVPN Repository
         run: |
+          # Mengambil source code resmi dari ambrop72/badvpn
           git clone https://github.com/ambrop72/badvpn.git
 
-      - name: Build tun2socks
+      - name: Compile BadVPN tun2socks
         run: |
           cd badvpn
-          mkdir -p build && cd build
+          mkdir build && cd build
+          
+          # Konfigurasi CMake untuk Cross-Compile ke ARM
+          # BUILD_NOTHING_BY_DEFAULT=1: Mencegah build fitur BadVPN lain agar proses cepat
+          # BUILD_TUN2SOCKS=1: Hanya build tun2socks
           cmake .. \
-            -DCMAKE_C_COMPILER=arm-linux-gnueabi-gcc \
             -DCMAKE_SYSTEM_NAME=Linux \
-            -DCMAKE_SYSTEM_PROCESSOR=armv7 \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_NOTHING_BY_DEFAULT=ON \
-            -DBUILD_TUN2SOCKS=ON
-          make -j$(nproc) tun2socks
-          echo "=== Build done. Checking output ==="
-          ls -la tun2socks/
-          file tun2socks/tun2socks || echo "Binary not found"
+            -DCMAKE_SYSTEM_PROCESSOR=arm \
+            -DCMAKE_C_COMPILER=arm-linux-gnueabihf-gcc \
+            -DCMAKE_CXX_COMPILER=arm-linux-gnueabihf-g++ \
+            -DCMAKE_C_FLAGS="-O3" \
+            -DCMAKE_EXE_LINKER_FLAGS="-static" \
+            -DBUILD_NOTHING_BY_DEFAULT=1 \
+            -DBUILD_TUN2SOCKS=1
+            
+          # Menjalankan proses kompilasi
+          make badvpn-tun2socks
 
-      - name: Strip and prepare artifact
+      - name: Strip Binary (Reduce Size)
         run: |
-          cd badvpn/build
-          if [ ! -f tun2socks/tun2socks ]; then
-            echo "Error: tun2socks binary not found. Build likely failed."
-            exit 1
-          fi
-          arm-linux-gnueabi-strip tun2socks/tun2socks
-          mv tun2socks/tun2socks libtun2socks.so
-          file libtun2socks.so
-          chmod +x libtun2socks.so
+          # Menghapus simbol debugging untuk mengecilkan ukuran file biner (cocok untuk router/STB)
+          find badvpn/build -name "badvpn-tun2socks" -exec arm-linux-gnueabihf-strip {} \;
 
-      - name: Upload artifact
+      - name: Prepare Artifact Output
+        run: |
+          mkdir -p output
+          # Mencari file hasil build dan memindahkannya ke folder output
+          find badvpn/build -name "badvpn-tun2socks" -exec cp {} output/ \;
+          
+          # Verifikasi tipe file untuk memastikan file adalah ARM 32-bit (ARMv7)
+          file output/badvpn-tun2socks
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: tun2socks-armv7
-          path: badvpn/build/libtun2socks.so
+          name: badvpn-tun2socks-armv7
+          path: output/badvpn-tun2socks
