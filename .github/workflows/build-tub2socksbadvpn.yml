@@ -1,7 +1,7 @@
 name: Build tun2socks (BadVPN) for armv7
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:          # bisa dijalankan manual dari tab Actions
   push:
     branches: [ main ]
 
@@ -12,30 +12,39 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabi cmake make
+          sudo apt-get install -y gcc-arm-linux-gnueabi cmake make file
 
       - name: Clone BadVPN
         run: |
           git clone https://github.com/ambrop72/badvpn.git
-          cd badvpn
 
       - name: Build tun2socks
         run: |
           cd badvpn
-          mkdir build && cd build
+          mkdir -p build && cd build
           cmake .. \
             -DCMAKE_C_COMPILER=arm-linux-gnueabi-gcc \
             -DCMAKE_SYSTEM_NAME=Linux \
             -DCMAKE_SYSTEM_PROCESSOR=armv7 \
+            -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_NOTHING_BY_DEFAULT=ON \
             -DBUILD_TUN2SOCKS=ON
-          make -j$(nproc)
+          make -j$(nproc) tun2socks
+          echo "=== Build done. Checking output ==="
+          ls -la tun2socks/
+          file tun2socks/tun2socks || echo "Binary not found"
 
-      - name: Strip & rename
+      - name: Strip and prepare artifact
         run: |
           cd badvpn/build
+          if [ ! -f tun2socks/tun2socks ]; then
+            echo "Error: tun2socks binary not found. Build likely failed."
+            exit 1
+          fi
           arm-linux-gnueabi-strip tun2socks/tun2socks
           mv tun2socks/tun2socks libtun2socks.so
+          file libtun2socks.so
+          chmod +x libtun2socks.so
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
