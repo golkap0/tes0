@@ -1,0 +1,94 @@
+name: Auto Patch YouTube with anddea Patches
+
+on:
+  workflow_dispatch: # Hanya dijalankan manual
+
+jobs:
+  patch-youtube:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      # Download morphe-cli terbaru
+      - name: Download morphe-cli
+        run: |
+          mkdir -p tools
+          MORPHE_CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          wget -O tools/morphe-cli.jar "$MORPHE_CLI_URL"
+          echo "✓ morphe-cli downloaded"
+      
+      # Download patches anddea VERSI STABIL TERBARU (Latest)
+      - name: Download anddea Patches (Latest)
+        run: |
+          mkdir -p patches
+          PATCHES_URL=$(curl -s https://api.github.com/repos/anddea/revanced-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+          wget -O patches/patches.mpp "$PATCHES_URL"
+          echo "✓ anddea patches (Latest) downloaded"
+      
+      # Download YouTube APK v20.05.46
+      - name: Download YouTube APK v20.05.46
+        run: |
+          wget -O youtube-20.05.46.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.05.46.apk"
+          echo "✓ YouTube v20.05.46 downloaded"
+      
+      # Decode Custom Keystore dari GitHub Secrets
+      - name: Prepare Custom Key
+        run: |
+          echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
+          echo "✓ Custom Keystore prepared"
+      
+      # Proses Patching dengan Custom Key & Armv7 Only
+      - name: Patch YouTube v20.05.46
+        run: |
+          echo "Starting patching process..."
+          java -jar tools/morphe-cli.jar patch \
+            --patches patches/patches.mpp \
+            --striplibs armeabi-v7a \
+            --continue-on-error \
+            --disable "Custom branding" \
+            --keystore my-release-key.keystore \
+            --keystore-password "${{ secrets.MY_KEY_PASS }}" \
+            --keystore-entry-alias "fas" \
+            --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
+            youtube-20.05.46.apk \
+            --out youtube-20.05.46-patched.apk
+          echo "✓ Patching completed"
+      
+      # Verify Patched APK
+      - name: Verify Patched APK
+        run: |
+          if [ -f youtube-20.05.46-patched.apk ]; then
+            echo "✓ Patched APK created successfully"
+            if unzip -t youtube-20.05.46-patched.apk > /dev/null 2>&1; then
+              echo "✓ Patched APK is valid and intact"
+            else
+              echo "✗ Patched APK is corrupted"
+              exit 1
+            fi
+          else
+            echo "✗ Patching failed"
+            exit 1
+          fi
+      
+      # Upload ke Artifacts - Berlaku 1 Hari
+      - name: Upload Patched APK to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-20.05.46-anddea-mpp-signed
+          path: youtube-20.05.46-patched.apk
+          retention-days: 1
+      
+      # Cleanup
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f *.apk
+          rm -f *.keystore
+          echo "✓ Cleanup completed"
