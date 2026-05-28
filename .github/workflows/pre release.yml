@@ -1,4 +1,4 @@
-name: Auto Patch YouTube patch pre release
+name: MORPHE Patch YouTube patch pre release
 
 on:
   workflow_dispatch:
