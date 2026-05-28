@@ -1,13 +1,3 @@
-Berikut adalah pembaruan workflow GitHub Actions Anda untuk mengambil versi
-pre-release terbaru dari repositori patches anddea serta menggunakan APK YouTube
-v20.05.46 dari tautan yang Anda sediakan.
-
-Sama seperti sebelumnya, langkah setup Python dan gdown telah dihapus agar
-proses workflow berjalan lebih cepat karena berkas APK sekarang diunduh langsung
-menggunakan perintah wget.
-
-File Workflow (.github/workflows/patch.yml):
-
 name: Auto Patch YouTube patch pre release
 
 on:
