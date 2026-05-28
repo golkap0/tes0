@@ -1,0 +1,98 @@
+Berikut adalah pembaruan workflow GitHub Actions Anda untuk mengambil versi
+pre-release terbaru dari repositori patches anddea serta menggunakan APK YouTube
+v20.05.46 dari tautan yang Anda sediakan.
+
+Sama seperti sebelumnya, langkah setup Python dan gdown telah dihapus agar
+proses workflow berjalan lebih cepat karena berkas APK sekarang diunduh langsung
+menggunakan perintah wget.
+
+File Workflow (.github/workflows/patch.yml):
+
+name: Auto Patch YouTube patch pre release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch-youtube:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Download tools & patches
+        run: |
+          mkdir -p tools patches
+          # Download CLI terbaru
+          CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          wget -O tools/morphe-cli.jar "$CLI_URL"
+          
+          # Download MPP Pre-release/Release terbaru dari anddea (indeks [0])
+          PATCHES_URL=$(curl -s https://api.github.com/repos/anddea/revanced-patches/releases | jq -r '.[0].assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+          wget -O patches/patches.mpp "$PATCHES_URL"
+          echo "✓ tools & patches downloaded"
+
+      # Download YouTube APK v20.05.46
+      - name: Download YouTube APK
+        run: |
+          wget -O youtube.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.05.46.apk"
+          echo "✓ YouTube APK downloaded"
+      
+      # Restore Custom Keystore
+      - name: Prepare Custom Keystore
+        run: |
+          echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
+          echo "✓ Keystore file restored"
+      
+      # Proses Patching
+      - name: Patch YouTube
+        run: |
+          java -jar tools/morphe-cli.jar patch \
+            --patches patches/patches.mpp \
+            --striplibs armeabi-v7a \
+            --continue-on-error \
+            -d "Custom branding" \
+            --keystore my-release-key.keystore \
+            --keystore-password "${{ secrets.MY_KEY_PASS }}" \
+            --keystore-entry-alias "fas" \
+            --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
+            youtube.apk \
+            --out youtube-20.05.46-patched.apk
+          echo "✓ Patching completed"
+
+      # Verifikasi berkas APK hasil patch
+      - name: Verify Patched APK
+        run: |
+          if [ -f youtube-20.05.46-patched.apk ]; then
+            echo "✓ Patched APK created successfully"
+            if unzip -t youtube-20.05.46-patched.apk > /dev/null 2>&1; then
+              echo "✓ Patched APK is valid and intact"
+            else
+              echo "✗ Patched APK is corrupted"
+              exit 1
+            fi
+          else
+            echo "✗ Patching failed"
+            exit 1
+          fi
+
+      # Upload ke Artifacts
+      - name: Upload Patched APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-v20.05.46-anddea-pre-signed
+          path: youtube-20.05.46-patched.apk
+          retention-days: 7
+
+      # Pembersihan berkas sensitif
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f *.apk *.keystore
+          echo "✓ Cleanup completed"
