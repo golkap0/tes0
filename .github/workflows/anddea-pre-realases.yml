@@ -1,4 +1,4 @@
-name: Anddea patch pre release
+name: anddea pre realeses
 
 on:
   workflow_dispatch:
@@ -48,6 +48,8 @@ jobs:
             --striplibs armeabi-v7a \
             --continue-on-error \
             -d "Custom branding" \
+            -e "MaterialYou" \
+            -e "Theme" \
             --keystore my-release-key.keystore \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
             --keystore-entry-alias "fas" \
