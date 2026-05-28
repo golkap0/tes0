@@ -16,9 +16,7 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       
-      - name: Install gdown
-        run: pip install gdown
-      
+
       - name: Download tools & patches
         run: |
           mkdir -p tools patches
