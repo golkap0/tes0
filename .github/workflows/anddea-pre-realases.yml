@@ -31,7 +31,7 @@ jobs:
       # Download YouTube APK v20.05.46
       - name: Download YouTube APK
         run: |
-          wget -O youtube.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.26.46.apk"
+          wget -O youtube.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.21.37.apk"
           echo "✓ YouTube APK downloaded"
       
       # Restore Custom Keystore
@@ -55,15 +55,15 @@ jobs:
             --keystore-entry-alias "fas" \
             --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
             youtube.apk \
-            --out youtube-20.05.46-patched.apk
+            --out youtube-20.21.37-patched.apk
           echo "✓ Patching completed"
 
       # Verifikasi berkas APK hasil patch
       - name: Verify Patched APK
         run: |
-          if [ -f youtube-20.05.46-patched.apk ]; then
+          if [ -f youtube-20.21.37-patched.apk ]; then
             echo "✓ Patched APK created successfully"
-            if unzip -t youtube-20.05.46-patched.apk > /dev/null 2>&1; then
+            if unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1; then
               echo "✓ Patched APK is valid and intact"
             else
               echo "✗ Patched APK is corrupted"
@@ -78,8 +78,8 @@ jobs:
       - name: Upload Patched APK
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-v20.05.46-anddea-pre-signed
-          path: youtube-20.05.46-patched.apk
+          name: youtube-v20.21.37-anddea-pre-signed
+          path: youtube-20.21.37-patched.apk
           retention-days: 7
 
       # Pembersihan berkas sensitif
