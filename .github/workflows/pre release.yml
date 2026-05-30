@@ -29,7 +29,7 @@ jobs:
 
       - name: Download YouTube APK
         run: |
-          wget https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.21.37.apk -O youtube.apk
+          wget https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.26.46.apk -O youtube.apk
           echo "✓ YouTube APK downloaded"
       
       # Step ini mengubah teks Base64 kembali menjadi file .keystore asli kamu
