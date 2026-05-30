@@ -31,7 +31,7 @@ jobs:
       # Download YouTube APK v20.05.46
       - name: Download YouTube APK
         run: |
-          wget -O youtube.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.05.46.apk"
+          wget -O youtube.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.26.46.apk"
           echo "✓ YouTube APK downloaded"
       
       # Restore Custom Keystore
