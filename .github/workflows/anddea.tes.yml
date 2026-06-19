@@ -53,6 +53,8 @@ jobs:
             --striplibs armeabi-v7a \
             --continue-on-error \
             --disable "Custom branding" \
+            --enable "Theme" \
+            -O darkThemeBackgroundColor=@android:color/black \
             --keystore my-release-key.keystore \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
             --keystore-entry-alias "fas" \
