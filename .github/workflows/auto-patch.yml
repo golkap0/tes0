@@ -1,6 +1,9 @@
-name: auto rilis YouTube v20.21.37 (Release with Changelog)
+name: Auto Run Patch YouTube v20.21.37 (Release with Changelog)
 
 on:
+  schedule:
+    # Berjalan otomatis setiap hari pada pukul 00:00 UTC (07:00 WIB)
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       force:
