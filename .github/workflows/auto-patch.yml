@@ -1,4 +1,4 @@
-name: Auto Patch YouTube v20.21.37 (Release with Changelog)
+name: auto rilis YouTube v20.21.37 (Release with Changelog)
 
 on:
   workflow_dispatch:
