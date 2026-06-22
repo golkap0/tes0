@@ -1,0 +1,133 @@
+name: Auto Patch YouTube v20.21.37 (Release with Changelog)
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Paksa jalankan patching dan rilis meskipun versi sudah ada?'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  check-update:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+      mpp_tag: ${{ steps.check.outputs.mpp_tag }}
+      patches_url: ${{ steps.check.outputs.patches_url }}
+    steps:
+      - name: Check Morphe Release
+        id: check
+        run: |
+          # Ambil rilis terbaru dari repo Morphe
+          RESPONSE=$(curl -s https://api.github.com/repos/MorpheApp/morphe-patches/releases/latest)
+          MPP_TAG=$(echo "$RESPONSE" | jq -r '.tag_name')
+          
+          if [ -z "$MPP_TAG" ] || [ "$MPP_TAG" = "null" ]; then
+            echo "Error: Gagal mengambil tag rilis dari Morphe."
+            exit 1
+          fi
+          
+          TARGET_TAG="patch-${MPP_TAG}"
+          echo "Tag Morphe terbaru: $MPP_TAG"
+          echo "Mengecek keberadaan rilis lokal dengan tag: $TARGET_TAG"
+          
+          # Cek apakah tag rilis tersebut sudah ada di repo Anda sendiri
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TARGET_TAG}")
+          
+          # Jika rilis sudah ada (HTTP 200) dan input 'force' tidak dicentang/true
+          if [ "$HTTP_STATUS" -eq 200 ] && [ "${{ inputs.force }}" != "true" ]; then
+            echo "Rilis ${TARGET_TAG} sudah ada di repository Anda. Melewati proses patching."
+            echo "should_run=false" >> $GITHUB_OUTPUT
+          else
+            echo "Rilis baru terdeteksi atau dijalankan secara paksa. Memulai proses..."
+            PATCHES_URL=$(echo "$RESPONSE" | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+            
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "mpp_tag=${MPP_TAG}" >> $GITHUB_OUTPUT
+            echo "patches_url=${PATCHES_URL}" >> $GITHUB_OUTPUT
+          fi
+
+  patch-youtube:
+    needs: check-update
+    # Hanya berjalan jika job 'check-update' mendeteksi ada pembaruan baru atau 'force' bernilai true
+    if: needs.check-update.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write 
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Install gdown
+        run: pip install gdown
+      
+      - name: Download Patches & Fetch Changelog
+        run: |
+          mkdir -p tools patches
+          # Download file MPP dari URL yang didapat pada tahap pengecekan
+          wget -O patches/patches.mpp "${{ needs.check-update.outputs.patches_url }}"
+          
+          # Mengambil changelog spesifik untuk tag rilis tersebut
+          RESPONSE=$(curl -s "https://api.github.com/repos/MorpheApp/morphe-patches/releases/tags/${{ needs.check-update.outputs.mpp_tag }}")
+          MPP_BODY=$(echo "$RESPONSE" | jq -r '.body')
+          
+          # Simpan ke file changelog.txt
+          echo "$MPP_BODY" > changelog.txt
+      
+      - name: Download morphe-cli
+        run: |
+          CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          wget -O tools/morphe-cli.jar "$CLI_URL"
+
+      - name: Download YouTube APK
+        run: |
+          gdown "16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW" -O youtube.apk --quiet
+      
+      - name: Prepare Custom Key
+        run: |
+          echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
+      
+      - name: Patch YouTube
+        run: |
+          java -jar tools/morphe-cli.jar patch \
+            --patches patches/patches.mpp \
+            --striplibs armeabi-v7a \
+            --continue-on-error \
+            --disable "Custom branding" \
+            --keystore my-release-key.keystore \
+            --keystore-password "${{ secrets.MY_KEY_PASS }}" \
+            --keystore-entry-alias "fas" \
+            --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
+            youtube.apk \
+            --out youtube-20.21.37-patched.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "patch-${{ needs.check-update.outputs.mpp_tag }}"
+          name: "YouTube v20.21.37 (MPP ${{ needs.check-update.outputs.mpp_tag }})"
+          body_path: changelog.txt
+          files: youtube-20.21.37-patched.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup
+        if: always()
+        run: rm -f *.apk *.keystore changelog.txt
