@@ -2,8 +2,8 @@ name: Auto Run Patch YouTube v20.21.37 (Release with Changelog)
 
 on:
   schedule:
-    # Berjalan otomatis setiap hari pada pukul 00:00 UTC (07:00 WIB)
-    - cron: '0 0 * * *'
+    # Berjalan otomatis setiap hari pada pukul 17:00 UTC (00:00 WIB)
+    - cron: '0 17 * * *'
   workflow_dispatch:
     inputs:
       force:
