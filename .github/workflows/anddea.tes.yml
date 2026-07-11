@@ -32,11 +32,11 @@ jobs:
           wget -O patches/patches.mpp "$PATCHES_URL"
           echo "✓ anddea patches (Latest) downloaded"
       
-      # Download YouTube APK v20.05.46
-      - name: Download YouTube APK v20.05.46
+      # Download YouTube APK v20.21.37
+      - name: Download YouTube APK v20.21.37
         run: |
-          wget -O youtube-20.26.46.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.26.46.apk"
-          echo "✓ YouTube v20.26.46 downloaded"
+          wget -O youtube-20.21.37.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.21.37.apk"
+          echo "✓ YouTube v20.21.37 downloaded"
       
       # Decode Custom Keystore dari GitHub Secrets
       - name: Prepare Custom Key
@@ -45,7 +45,7 @@ jobs:
           echo "✓ Custom Keystore prepared"
       
       # Proses Patching dengan Custom Key & Armv7 Only
-      - name: Patch YouTube v20.05.46
+      - name: Patch YouTube v20.21.37
         run: |
           echo "Starting patching process..."
           java -jar tools/morphe-cli.jar patch \
@@ -59,16 +59,16 @@ jobs:
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
             --keystore-entry-alias "fas" \
             --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
-            youtube-20.26.46.apk \
-            --out youtube-20.26.46-patched.apk
+            youtube-20.21.37.apk \
+            --out youtube-20.21.37-patched.apk
           echo "✓ Patching completed"
       
       # Verify Patched APK
       - name: Verify Patched APK
         run: |
-          if [ -f youtube-20.26.46-patched.apk ]; then
+          if [ -f youtube-20.21.37-patched.apk ]; then
             echo "✓ Patched APK created successfully"
-            if unzip -t youtube-20.26.46-patched.apk > /dev/null 2>&1; then
+            if unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1; then
               echo "✓ Patched APK is valid and intact"
             else
               echo "✗ Patched APK is corrupted"
@@ -83,8 +83,8 @@ jobs:
       - name: Upload Patched APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-20.05.46-anddea-mpp-signed
-          path: youtube-20.05.46-patched.apk
+          name: youtube-20.21.37-anddea-mpp-signed
+          path: youtube-20.21.37-patched.apk
           retention-days: 1
       
       # Cleanup
