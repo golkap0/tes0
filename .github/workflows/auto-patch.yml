@@ -23,12 +23,13 @@ jobs:
       - name: Check Morphe Release
         id: check
         run: |
-          # Ambil rilis terbaru dari repo Morphe
-          RESPONSE=$(curl -s https://api.github.com/repos/MorpheApp/morphe-patches/releases/latest)
-          MPP_TAG=$(echo "$RESPONSE" | jq -r '.tag_name')
+          # Ambil rilis terbaru dari repo Morphe dengan autentikasi token
+          RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/MorpheApp/morphe-patches/releases/latest)
+          MPP_TAG=$(echo "$RESPONSE" | jq -r '.tag_name // empty')
           
           if [ -z "$MPP_TAG" ] || [ "$MPP_TAG" = "null" ]; then
-            echo "Error: Gagal mengambil tag rilis dari Morphe."
+            echo "Error: Gagal mengambil tag rilis dari Morphe. Respons API:"
+            echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
             exit 1
           fi
           
@@ -47,7 +48,12 @@ jobs:
             echo "should_run=false" >> $GITHUB_OUTPUT
           else
             echo "Rilis baru terdeteksi atau dijalankan secara paksa. Memulai proses..."
-            PATCHES_URL=$(echo "$RESPONSE" | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+            PATCHES_URL=$(echo "$RESPONSE" | jq -r '.assets[]? | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+            
+            if [ -z "$PATCHES_URL" ] || [ "$PATCHES_URL" = "null" ]; then
+              echo "Error: Gagal mendapatkan URL patches (.mpp) dari rilis Morphe."
+              exit 1
+            fi
             
             echo "should_run=true" >> $GITHUB_OUTPUT
             echo "mpp_tag=${MPP_TAG}" >> $GITHUB_OUTPUT
@@ -85,16 +91,23 @@ jobs:
           # Download file MPP dari URL yang didapat pada tahap pengecekan
           wget -O patches/patches.mpp "${{ needs.check-update.outputs.patches_url }}"
           
-          # Mengambil changelog spesifik untuk tag rilis tersebut
-          RESPONSE=$(curl -s "https://api.github.com/repos/MorpheApp/morphe-patches/releases/tags/${{ needs.check-update.outputs.mpp_tag }}")
-          MPP_BODY=$(echo "$RESPONSE" | jq -r '.body')
+          # Mengambil changelog spesifik untuk tag rilis tersebut (dengan autentikasi)
+          RESPONSE=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" "https://api.github.com/repos/MorpheApp/morphe-patches/releases/tags/${{ needs.check-update.outputs.mpp_tag }}")
+          MPP_BODY=$(echo "$RESPONSE" | jq -r '.body // "Tidak ada deskripsi perubahan."')
           
           # Simpan ke file changelog.txt
           echo "$MPP_BODY" > changelog.txt
       
       - name: Download morphe-cli
         run: |
-          CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          # Mengambil URL rilis dengan autentikasi token dan filter aman jq
+          CLI_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[]? | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          
+          if [ -z "$CLI_URL" ] || [ "$CLI_URL" = "null" ]; then
+            echo "Error: Gagal mendapatkan URL download morphe-cli.jar."
+            exit 1
+          fi
+          
           wget -O tools/morphe-cli.jar "$CLI_URL"
 
       - name: Download YouTube APK
