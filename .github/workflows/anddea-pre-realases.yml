@@ -1,5 +1,8 @@
 name: Auto Patch YouTube with anddea pre-release Patches
 
+permissions:
+  contents: read
+
 on:
   workflow_dispatch: # Hanya dijalankan manual
 
@@ -18,35 +21,58 @@ jobs:
       
       # Download morphe-cli terbaru (termasuk pre-release jika ada)
       - name: Download morphe-cli
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           mkdir -p tools
-          MORPHE_CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases | jq -r '.[0].assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
-          wget -O tools/morphe-cli.jar "$MORPHE_CLI_URL"
-          echo "✓ morphe-cli downloaded"
+          API_URL="https://api.github.com/repos/MorpheApp/morphe-cli/releases"
+          RESP=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$API_URL")
+          MORPHE_CLI_URL=$(printf '%s' "$RESP" | jq -r '(.[]? // .) | .assets[] | select(.name | test("\\.jar$")) | .browser_download_url' | head -n1)
+          if [ -z "$MORPHE_CLI_URL" ]; then
+            echo "✗ Could not find morphe-cli .jar download URL. API response:"
+            printf '%s\n' "$RESP"
+            exit 1
+          fi
+          wget --quiet --tries=3 --timeout=30 -O tools/morphe-cli.jar "$MORPHE_CLI_URL"
+          echo "✓ morphe-cli downloaded from $MORPHE_CLI_URL"
       
       # Download patches anddea PRE-RELEASE TERBARU
       - name: Download anddea Patches (Pre-Release)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           mkdir -p patches
-          PATCHES_URL=$(curl -s https://api.github.com/repos/anddea/revanced-patches/releases | jq -r '.[0].assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
-          wget -O patches/patches.mpp "$PATCHES_URL"
-          echo "✓ anddea patches (Pre-Release) downloaded"
+          API_URL="https://api.github.com/repos/anddea/revanced-patches/releases"
+          RESP=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" "$API_URL")
+          PATCHES_URL=$(printf '%s' "$RESP" | jq -r '(.[]? // .) | .assets[] | select(.name | test("\\.mpp$")) | .browser_download_url' | head -n1)
+          if [ -z "$PATCHES_URL" ]; then
+            echo "✗ Could not find anddea patches (.mpp) download URL. API response:"
+            printf '%s\n' "$RESP"
+            exit 1
+          fi
+          wget --quiet --tries=3 --timeout=30 -O patches/patches.mpp "$PATCHES_URL"
+          echo "✓ anddea patches (Pre-Release) downloaded from $PATCHES_URL"
       
       # Download YouTube APK v20.21.37
       - name: Download YouTube APK v20.21.37
         run: |
-          wget -O youtube-20.21.37.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.21.37.apk"
+          set -euo pipefail
+          wget --quiet --tries=3 --timeout=30 -O youtube-20.21.37.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.21.37.apk"
           echo "✓ YouTube v20.21.37 downloaded"
       
       # Decode Custom Keystore dari GitHub Secrets
       - name: Prepare Custom Key
         run: |
+          set -euo pipefail
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
           echo "✓ Custom Keystore prepared"
       
       # Proses Patching dengan Custom Key & Armv7 Only
       - name: Patch YouTube v20.21.37
         run: |
+          set -euo pipefail
           echo "Starting patching process..."
           java -jar tools/morphe-cli.jar patch \
             --patches patches/patches.mpp \
@@ -66,6 +92,7 @@ jobs:
       # Verify Patched APK
       - name: Verify Patched APK
         run: |
+          set -euo pipefail
           if [ -f youtube-20.21.37-patched.apk ]; then
             echo "✓ Patched APK created successfully"
             if unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1; then
