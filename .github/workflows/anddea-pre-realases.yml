@@ -20,7 +20,14 @@ jobs:
       - name: Download morphe-cli
         run: |
           mkdir -p tools
-          MORPHE_CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases | jq -r '.[0].assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          MORPHE_CLI_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/MorpheApp/morphe-cli/releases | jq -r 'if type=="array" then .[0].assets[] | select(.name | endswith(".jar")) | .browser_download_url else empty end' | head -1)
+          
+          if [ -z "$MORPHE_CLI_URL" ]; then
+            echo "✗ Gagal via /releases, mencoba endpoint /latest..."
+            MORPHE_CLI_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url' | head -1)
+          fi
+          
+          echo "Downloading morphe-cli from: $MORPHE_CLI_URL"
           wget -O tools/morphe-cli.jar "$MORPHE_CLI_URL"
           echo "✓ morphe-cli downloaded"
       
@@ -28,9 +35,16 @@ jobs:
       - name: Download anddea Patches (Pre-release)
         run: |
           mkdir -p patches
-          PATCHES_URL=$(curl -s https://api.github.com/repos/anddea/revanced-patches/releases | jq -r 'map(select(.prerelease))[0].assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+          PATCHES_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/anddea/revanced-patches/releases | jq -r 'if type=="array" then ([.[] | select(.prerelease == true)][0] // .[0]).assets[] | select(.name | endswith(".mpp")) | .browser_download_url else empty end' | head -1)
+          
+          if [ -z "$PATCHES_URL" ]; then
+            echo "✗ Gagal mendapatkan Pre-release, mencoba fallback endpoint /latest..."
+            PATCHES_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/anddea/revanced-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+          fi
+          
+          echo "Downloading patches from: $PATCHES_URL"
           wget -O patches/patches.mpp "$PATCHES_URL"
-          echo "✓ anddea patches (Pre-release) downloaded"
+          echo "✓ anddea patches downloaded"
       
       # Download YouTube APK v20.21.37
       - name: Download YouTube APK v20.21.37
