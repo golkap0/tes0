@@ -1,4 +1,4 @@
-name: Auto Patch YouTube with anddea Pre-release Patches
+name: Auto Patch YouTube with anddea Patches
 
 on:
   workflow_dispatch: # Hanya dijalankan manual
@@ -6,7 +6,7 @@ on:
 jobs:
   patch-youtube:
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
       
@@ -16,35 +16,21 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
       
-      # Download morphe-cli terbaru
+      # Download morphe-cli terbaru (termasuk pre-release jika ada)
       - name: Download morphe-cli
         run: |
           mkdir -p tools
-          MORPHE_CLI_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/MorpheApp/morphe-cli/releases | jq -r 'if type=="array" then .[0].assets[] | select(.name | endswith(".jar")) | .browser_download_url else empty end' | head -1)
-          
-          if [ -z "$MORPHE_CLI_URL" ]; then
-            echo "✗ Gagal via /releases, mencoba endpoint /latest..."
-            MORPHE_CLI_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | endswith(".jar")) | .browser_download_url' | head -1)
-          fi
-          
-          echo "Downloading morphe-cli from: $MORPHE_CLI_URL"
+          MORPHE_CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases | jq -r '.[0].assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
           wget -O tools/morphe-cli.jar "$MORPHE_CLI_URL"
           echo "✓ morphe-cli downloaded"
       
       # Download patches anddea PRE-RELEASE TERBARU
-      - name: Download anddea Patches (Pre-release)
+      - name: Download anddea Patches (Pre-Release)
         run: |
           mkdir -p patches
-          PATCHES_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/anddea/revanced-patches/releases | jq -r 'if type=="array" then ([.[] | select(.prerelease == true)][0] // .[0]).assets[] | select(.name | endswith(".mpp")) | .browser_download_url else empty end' | head -1)
-          
-          if [ -z "$PATCHES_URL" ]; then
-            echo "✗ Gagal mendapatkan Pre-release, mencoba fallback endpoint /latest..."
-            PATCHES_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/anddea/revanced-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
-          fi
-          
-          echo "Downloading patches from: $PATCHES_URL"
+          PATCHES_URL=$(curl -s https://api.github.com/repos/anddea/revanced-patches/releases | jq -r '.[0].assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
           wget -O patches/patches.mpp "$PATCHES_URL"
-          echo "✓ anddea patches downloaded"
+          echo "✓ anddea patches (Pre-Release) downloaded"
       
       # Download YouTube APK v20.21.37
       - name: Download YouTube APK v20.21.37
@@ -97,7 +83,7 @@ jobs:
       - name: Upload Patched APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-20.21.37-anddea-prerelease-signed
+          name: youtube-20.21.37-anddea-mpp-signed
           path: youtube-20.21.37-patched.apk
           retention-days: 1
       
