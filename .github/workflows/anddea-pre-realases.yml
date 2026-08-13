@@ -1,8 +1,7 @@
 name: Auto Patch YouTube with anddea pre-realese Patches
 
 on:
-  release:
-    types: [prereleased] # Menjalankan workflow saat pre-release dibuat
+  workflow_dispatch: # Hanya dijalankan manual
 
 jobs:
   patch-youtube:
