@@ -21,14 +21,20 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-
-      # Download morphe-cli terbaru
+      
       - name: Download morphe-cli
         run: |
           mkdir -p tools
-          MORPHE_CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
-          wget -O tools/morphe-cli.jar "$MORPHE_CLI_URL"
-          echo "✓ morphe-cli downloaded"
+          # Menggunakan nama repo baru 'morphe-desktop' dan menambahkan '-sL' agar curl mengikuti redirect
+          CLI_URL=$(curl -sL https://api.github.com/repos/MorpheApp/morphe-desktop/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          
+          if [ -z "$CLI_URL" ] || [ "$CLI_URL" = "null" ]; then
+            echo "Error: Gagal mendapatkan URL download untuk morphe-cli.jar"
+            exit 1
+          fi
+          
+          echo "Downloading morphe-cli dari: $CLI_URL"
+          wget -O tools/morphe-cli.jar "$CLI_URL"
 
       # Download patches anddea VERSI STABIL TERBARU (Latest)
       - name: Download anddea Patches (Latest)
