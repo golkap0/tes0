@@ -150,7 +150,7 @@ jobs:
           fi
 
       - name: Upload Patched APK to Artifacts
-        uses: actions/upload-artifact@v5 # Update ke v5
+        uses: actions/upload-artifact@v4 # Update ke v5
         with:
           name: youtube-${{ env.PATCHED_VERSION }}-anddea-mpp-signed
           path: ${{ env.PATCHED_FILE }}
