@@ -1,4 +1,4 @@
-name: Auto Patch YouTube with anddea pre-release Patches
+name: Auto Patch YouTube with anddea pre-release Patches TEST
 
 on:
   workflow_dispatch: # Hanya dijalankan manual
@@ -8,10 +8,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v5 # Update ke v5
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5 # Update ke v5
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -29,8 +30,8 @@ jobs:
             exit 1
           fi
           
-          echo "Downloading morphe-cli dari: $CLI_URL"
-          wget -O tools/morphe-cli.jar "$CLI_URL"
+          echo "Downloading morphe-cli..."
+          wget -q -O tools/morphe-cli.jar "$CLI_URL"
 
       - name: Download anddea Patches (Pre-release .mpp)
         run: |
@@ -55,25 +56,22 @@ jobs:
             echo "Pre-release tidak tersedia, menggunakan latest stable"
           fi
           
-          echo "Downloading patches dari: $PATCHES_URL"
-          wget -O patches/patches.mpp "$PATCHES_URL"
-          echo "✓ anddea patches downloaded"
+          echo "Downloading patches..."
+          wget -q -O patches/patches.mpp "$PATCHES_URL"
 
       - name: Download YouTube APK v20.21.37 (Primary)
         run: |
           set -euo pipefail
-          wget -O youtube-20.21.37.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.21.37.apk"
+          wget -q -O youtube-20.21.37.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.21.37.apk"
           if [ ! -s youtube-20.21.37.apk ]; then
             echo "Error: Gagal mendownload YouTube APK v20.21.37"
             exit 1
           fi
-          echo "✓ YouTube v20.21.37 downloaded"
 
       - name: Prepare Custom Key
         run: |
           set -euo pipefail
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
-          echo "✓ Custom Keystore prepared"
 
       - name: Patch YouTube (v20.21.37 with fallback to v20.05.46)
         run: |
@@ -124,12 +122,11 @@ jobs:
             echo "⚠ Failed to patch v20.21.37, falling back to v20.05.46"
             
             # Download v20.05.46 sebagai fallback
-            wget -O youtube-20.05.46.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.05.46.apk"
+            wget -q -O youtube-20.05.46.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.05.46.apk"
             if [ ! -s youtube-20.05.46.apk ]; then
               echo "Error: Gagal mendownload YouTube APK v20.05.46"
               exit 1
             fi
-            echo "✓ YouTube v20.05.46 downloaded"
             
             # Coba patch v20.05.46
             if patch_apk youtube-20.05.46.apk youtube-20.05.46-patched.apk; then
@@ -153,7 +150,7 @@ jobs:
           fi
 
       - name: Upload Patched APK to Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5 # Update ke v5
         with:
           name: youtube-${{ env.PATCHED_VERSION }}-anddea-mpp-signed
           path: ${{ env.PATCHED_FILE }}
