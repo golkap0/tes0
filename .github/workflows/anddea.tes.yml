@@ -20,7 +20,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p tools
-          # Mengambil latest release Morphe CLI
           CLI_URL=$(curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             https://api.github.com/repos/MorpheApp/morphe-desktop/releases/latest \
             | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
@@ -37,29 +36,38 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p patches
-          # Hapus /latest, panggil /releases, dan filter yang prerelease == true
+          # Mengambil pre-release terbaru (bukan latest stable)
           PATCHES_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             https://api.github.com/repos/anddea/revanced-patches/releases \
             | jq -r '[.[] | select(.prerelease == true)] | .[0].assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
           
           if [ -z "$PATCHES_URL" ] || [ "$PATCHES_URL" = "null" ]; then
             echo "Error: Gagal mendapatkan URL download untuk pre-release patches.mpp"
-            exit 1
+            # Fallback ke latest stable jika pre-release tidak tersedia
+            PATCHES_URL=$(curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              https://api.github.com/repos/anddea/revanced-patches/releases/latest \
+              | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+            
+            if [ -z "$PATCHES_URL" ] || [ "$PATCHES_URL" = "null" ]; then
+              echo "Error: Gagal mendapatkan URL download untuk patches.mpp (baik pre-release maupun stable)"
+              exit 1
+            fi
+            echo "Pre-release tidak tersedia, menggunakan latest stable"
           fi
           
-          echo "Downloading pre-release patches dari: $PATCHES_URL"
+          echo "Downloading patches dari: $PATCHES_URL"
           wget -O patches/patches.mpp "$PATCHES_URL"
-          echo "✓ anddea pre-release patches (.mpp) downloaded"
+          echo "✓ anddea patches downloaded"
 
-      - name: Download YouTube APK v20.05.46
+      - name: Download YouTube APK v20.21.37 (Primary)
         run: |
           set -euo pipefail
-          wget -O youtube-20.05.46.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.05.46.apk"
-          if [ ! -s youtube-20.05.46.apk ]; then
-            echo "Error: Gagal mendownload YouTube APK"
+          wget -O youtube-20.21.37.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.21.37.apk"
+          if [ ! -s youtube-20.21.37.apk ]; then
+            echo "Error: Gagal mendownload YouTube APK v20.21.37"
             exit 1
           fi
-          echo "✓ YouTube v20.05.46 downloaded"
+          echo "✓ YouTube v20.21.37 downloaded"
 
       - name: Prepare Custom Key
         run: |
@@ -67,46 +75,88 @@ jobs:
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
           echo "✓ Custom Keystore prepared"
 
-      - name: Patch YouTube v20.05.46
+      - name: Patch YouTube (v20.21.37 with fallback to v20.05.46)
         run: |
           set -euo pipefail
-          echo "Starting patching process..."
-          java -jar tools/morphe-cli.jar patch \
-            --patches patches/patches.mpp \
-            --striplibs armeabi-v7a \
-            --continue-on-error \
-            --disable "Custom branding" \
-            --enable "Theme" \
-            -O darkThemeBackgroundColor=@android:color/black \
-            --keystore my-release-key.keystore \
-            --keystore-password "${{ secrets.MY_KEY_PASS }}" \
-            --keystore-entry-alias "fas" \
-            --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
-            youtube-20.05.46.apk \
-            --out youtube-20.05.46-patched.apk
-          echo "✓ Patching completed"
+          
+          # Fungsi untuk patching APK
+          patch_apk() {
+            local apk_file=$1
+            local output_file=$2
+            echo "Attempting to patch $apk_file..."
+            
+            if java -jar tools/morphe-cli.jar patch \
+              --patches patches/patches.mpp \
+              --striplibs armeabi-v7a \
+              --continue-on-error \
+              --disable "Custom branding" \
+              --enable "Theme" \
+              -O darkThemeBackgroundColor=@android:color/black \
+              --keystore my-release-key.keystore \
+              --keystore-password "${{ secrets.MY_KEY_PASS }}" \
+              --keystore-entry-alias "fas" \
+              --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
+              "$apk_file" \
+              --out "$output_file"; then
+              
+              echo "✓ Patching $apk_file succeeded"
+              # Verifikasi APK
+              if unzip -t "$output_file" > /dev/null 2>&1; then
+                echo "✓ $output_file is valid and intact"
+                return 0
+              else
+                echo "✗ $output_file is corrupted"
+                return 1
+              fi
+            else
+              echo "✗ Patching $apk_file failed"
+              return 1
+            fi
+          }
+
+          # Coba patch v20.21.37 terlebih dahulu
+          if patch_apk youtube-20.21.37.apk youtube-20.21.37-patched.apk; then
+            echo "✓ Successfully patched v20.21.37"
+            # Set environment variable untuk step selanjutnya
+            echo "PATCHED_VERSION=20.21.37" >> $GITHUB_ENV
+            echo "PATCHED_FILE=youtube-20.21.37-patched.apk" >> $GITHUB_ENV
+          else
+            echo "⚠ Failed to patch v20.21.37, falling back to v20.05.46"
+            
+            # Download v20.05.46 sebagai fallback
+            wget -O youtube-20.05.46.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.05.46.apk"
+            if [ ! -s youtube-20.05.46.apk ]; then
+              echo "Error: Gagal mendownload YouTube APK v20.05.46"
+              exit 1
+            fi
+            echo "✓ YouTube v20.05.46 downloaded"
+            
+            # Coba patch v20.05.46
+            if patch_apk youtube-20.05.46.apk youtube-20.05.46-patched.apk; then
+              echo "✓ Successfully patched v20.05.46"
+              echo "PATCHED_VERSION=20.05.46" >> $GITHUB_ENV
+              echo "PATCHED_FILE=youtube-20.05.46-patched.apk" >> $GITHUB_ENV
+            else
+              echo "✗ Failed to patch both versions"
+              exit 1
+            fi
+          fi
 
       - name: Verify Patched APK
         run: |
           set -euo pipefail
-          if [ -f youtube-20.05.46-patched.apk ]; then
-            echo "✓ Patched APK created successfully"
-            if unzip -t youtube-20.05.46-patched.apk > /dev/null 2>&1; then
-              echo "✓ Patched APK is valid and intact"
-            else
-              echo "✗ Patched APK is corrupted"
-              exit 1
-            fi
+          if [ -f "${{ env.PATCHED_FILE }}" ]; then
+            echo "✓ Patched APK (${{ env.PATCHED_VERSION }}) created successfully"
           else
-            echo "✗ Patching failed"
+            echo "✗ No patched APK created"
             exit 1
           fi
 
       - name: Upload Patched APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-20.05.46-anddea-mpp-signed
-          path: youtube-20.05.46-patched.apk
+          name: youtube-${{ env.PATCHED_VERSION }}-anddea-mpp-signed
+          path: ${{ env.PATCHED_FILE }}
           retention-days: 1
 
       - name: Cleanup
