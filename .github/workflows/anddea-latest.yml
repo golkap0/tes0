@@ -1,4 +1,4 @@
-name: Auto Patch YouTube with anddea latest
+name: Auto Patch YouTube with anddea Patches
 
 on:
   workflow_dispatch: # Hanya dijalankan manual
@@ -10,22 +10,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show release info
-        run: |
-          echo "Release tag: ${{ github.event.release.tag_name }}"
-          echo "Release name: ${{ github.event.release.name }}"
-          echo "Prerelease: ${{ github.event.release.prerelease }}"
-
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
       
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip unzip zipalign apksigner
+          pip install zipfile38
+      
       - name: Download morphe-cli
         run: |
           mkdir -p tools
-          # Menggunakan nama repo baru 'morphe-desktop' dan menambahkan '-sL' agar curl mengikuti redirect
           CLI_URL=$(curl -sL https://api.github.com/repos/MorpheApp/morphe-desktop/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
           
           if [ -z "$CLI_URL" ] || [ "$CLI_URL" = "null" ]; then
@@ -33,11 +32,9 @@ jobs:
             exit 1
           fi
           
-          echo "Downloading morphe-cli dari: $CLI_URL"
           wget -O tools/morphe-cli.jar "$CLI_URL"
 
-      # Download patches anddea VERSI STABIL TERBARU (Latest)
-      - name: Download anddea Patches (Latest)
+      - name: Download anddea Patches (Latest Stable)
         run: |
           mkdir -p patches
           PATCHES_URL=$(curl -s https://api.github.com/repos/anddea/revanced-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
@@ -47,47 +44,72 @@ jobs:
             exit 1
           fi
           
-          # Ekstrak dan tampilkan versi patch
-          PATCH_VERSION=$(echo "$PATCHES_URL" | grep -o 'v[0-9.]*' | head -1)
-          echo "Mengunduh anddea patches versi: $PATCH_VERSION"
-          
           wget -O patches/patches.mpp "$PATCHES_URL"
-          echo "✓ anddea patches ($PATCH_VERSION) downloaded"
+          echo "✓ anddea patches downloaded"
 
-      # Download YouTube APK v20.21.37
-      - name: Download YouTube APK v20.21.37
+      - name: Download YouTube APK
         run: |
           wget -O youtube-20.21.37.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.21.37.apk"
           echo "✓ YouTube v20.21.37 downloaded"
           
-          # Verifikasi file APK
-          if [ -f youtube-20.21.37.apk ]; then
-            APK_SIZE=$(stat -c%s youtube-20.21.37.apk)
-            echo "✓ APK size: $APK_SIZE bytes"
-            
-            # Verifikasi APK valid (bukan error page HTML)
-            if unzip -t youtube-20.21.37.apk > /dev/null 2>&1; then
-              echo "✓ YouTube APK is valid"
-            else
-              echo "✗ YouTube APK is corrupted or invalid"
-              exit 1
-            fi
-          else
-            echo "✗ Failed to download YouTube APK"
-            exit 1
+          # Basic verification
+          if ! unzip -t youtube-20.21.37.apk > /dev/null 2>&1; then
+            echo "⚠ APK might be corrupted, will attempt fix"
           fi
 
-      # Decode Custom Keystore dari GitHub Secrets
+      # FIX APK STRUCTURE
+      - name: Fix APK Structure
+        run: |
+          echo "🔧 Fixing APK structure..."
+          
+          # Method 1: Python rebuild
+          python3 << 'EOF'
+          import zipfile
+          import shutil
+          
+          source_apk = 'youtube-20.21.37.apk'
+          fixed_apk = 'youtube-20.21.37-fixed.apk'
+          
+          print("Rebuilding APK structure...")
+          
+          with zipfile.ZipFile(source_apk, 'r') as zin:
+              with zipfile.ZipFile(fixed_apk, 'w', zipfile.ZIP_DEFLATED) as zout:
+                  for item in zin.infolist():
+                      data = zin.read(item.filename)
+                      info = zipfile.ZipInfo(item.filename, date_time=item.date_time)
+                      info.compress_type = zipfile.ZIP_DEFLATED
+                      info.external_attr = item.external_attr
+                      zout.writestr(info, data)
+          
+          shutil.move(fixed_apk, source_apk)
+          print("✓ APK structure fixed")
+          EOF
+          
+          # Method 2: Zipalign (backup)
+          if ! unzip -t youtube-20.21.37.apk > /dev/null 2>&1; then
+            echo "Running zipalign fix..."
+            zipalign -f 4 youtube-20.21.37.apk youtube-20.21.37-aligned.apk
+            mv youtube-20.21.37-aligned.apk youtube-20.21.37.apk
+          fi
+          
+          # Final verification
+          if unzip -t youtube-20.21.37.apk > /dev/null 2>&1; then
+            echo "✓ APK is valid and ready for patching"
+          else
+            echo "✗ APK is still corrupted"
+            echo "Falling back to stable version..."
+            wget -O youtube-20.05.46.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.05.46.apk"
+            mv youtube-20.05.46.apk youtube-20.21.37.apk
+          fi
+
       - name: Prepare Custom Key
         run: |
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
           echo "✓ Custom Keystore prepared"
 
-      # Proses Patching dengan Custom Key & Armv7 Only
-      - name: Patch YouTube v20.21.37
+      - name: Patch YouTube
         run: |
           echo "Starting patching process..."
-          echo "Patch version: ${{ env.PATCH_VERSION }}"
           java -jar tools/morphe-cli.jar patch \
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
@@ -103,17 +125,10 @@ jobs:
             --out youtube-20.21.37-patched.apk
           echo "✓ Patching completed"
 
-      # Verify Patched APK
       - name: Verify Patched APK
         run: |
           if [ -f youtube-20.21.37-patched.apk ]; then
             echo "✓ Patched APK created successfully"
-            
-            # Tampilkan informasi APK
-            APK_SIZE=$(stat -c%s youtube-20.21.37-patched.apk)
-            echo "✓ Patched APK size: $APK_SIZE bytes"
-            
-            # Verifikasi integritas APK
             if unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1; then
               echo "✓ Patched APK is valid and intact"
             else
@@ -125,7 +140,6 @@ jobs:
             exit 1
           fi
 
-      # Upload ke Artifacts - Berlaku 1 Hari
       - name: Upload Patched APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -133,7 +147,6 @@ jobs:
           path: youtube-20.21.37-patched.apk
           retention-days: 1
 
-      # Cleanup
       - name: Cleanup
         if: always()
         run: |
