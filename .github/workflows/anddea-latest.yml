@@ -1,4 +1,4 @@
-name: Auto Patch YouTube with anddea pre-release Patches
+name: Auto Patch YouTube with anddea latest
 
 on:
   workflow_dispatch: # Hanya dijalankan manual
