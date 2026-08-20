@@ -62,7 +62,7 @@ jobs:
       - name: Download YouTube APK v20.21.37 (Primary)
         run: |
           set -euo pipefail
-          wget -q -O youtube-20.21.37.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.21.37.apk"
+          wget -q -O youtube-20.21.37.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.26.46.apk"
           if [ ! -s youtube-20.21.37.apk ]; then
             echo "Error: Gagal mendownload YouTube APK v20.21.37"
             exit 1
