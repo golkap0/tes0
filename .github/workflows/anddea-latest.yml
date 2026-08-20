@@ -1,4 +1,4 @@
-name: Auto Patch YouTube with anddea pre-realese Patches
+name: Auto Patch YouTube with anddea pre-release Patches
 
 on:
   workflow_dispatch: # Hanya dijalankan manual
@@ -41,14 +41,41 @@ jobs:
         run: |
           mkdir -p patches
           PATCHES_URL=$(curl -s https://api.github.com/repos/anddea/revanced-patches/releases/latest | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+          
+          if [ -z "$PATCHES_URL" ] || [ "$PATCHES_URL" = "null" ]; then
+            echo "Error: Gagal mendapatkan URL download untuk patches.mpp"
+            exit 1
+          fi
+          
+          # Ekstrak dan tampilkan versi patch
+          PATCH_VERSION=$(echo "$PATCHES_URL" | grep -o 'v[0-9.]*' | head -1)
+          echo "Mengunduh anddea patches versi: $PATCH_VERSION"
+          
           wget -O patches/patches.mpp "$PATCHES_URL"
-          echo "✓ anddea patches (Latest) downloaded"
+          echo "✓ anddea patches ($PATCH_VERSION) downloaded"
 
-      # Download YouTube APK v20.05.46
-      - name: Download YouTube APK v20.05.46
+      # Download YouTube APK v20.21.37
+      - name: Download YouTube APK v20.21.37
         run: |
-          wget -O youtube-20.05.46.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.05.46.apk"
-          echo "✓ YouTube v20.05.46 downloaded"
+          wget -O youtube-20.21.37.apk "https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.21.37.apk"
+          echo "✓ YouTube v20.21.37 downloaded"
+          
+          # Verifikasi file APK
+          if [ -f youtube-20.21.37.apk ]; then
+            APK_SIZE=$(stat -c%s youtube-20.21.37.apk)
+            echo "✓ APK size: $APK_SIZE bytes"
+            
+            # Verifikasi APK valid (bukan error page HTML)
+            if unzip -t youtube-20.21.37.apk > /dev/null 2>&1; then
+              echo "✓ YouTube APK is valid"
+            else
+              echo "✗ YouTube APK is corrupted or invalid"
+              exit 1
+            fi
+          else
+            echo "✗ Failed to download YouTube APK"
+            exit 1
+          fi
 
       # Decode Custom Keystore dari GitHub Secrets
       - name: Prepare Custom Key
@@ -57,9 +84,10 @@ jobs:
           echo "✓ Custom Keystore prepared"
 
       # Proses Patching dengan Custom Key & Armv7 Only
-      - name: Patch YouTube v20.05.46
+      - name: Patch YouTube v20.21.37
         run: |
           echo "Starting patching process..."
+          echo "Patch version: ${{ env.PATCH_VERSION }}"
           java -jar tools/morphe-cli.jar patch \
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
@@ -71,16 +99,22 @@ jobs:
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
             --keystore-entry-alias "fas" \
             --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
-            youtube-20.05.46.apk \
-            --out youtube-20.05.46-patched.apk
+            youtube-20.21.37.apk \
+            --out youtube-20.21.37-patched.apk
           echo "✓ Patching completed"
 
       # Verify Patched APK
       - name: Verify Patched APK
         run: |
-          if [ -f youtube-20.05.46-patched.apk ]; then
+          if [ -f youtube-20.21.37-patched.apk ]; then
             echo "✓ Patched APK created successfully"
-            if unzip -t youtube-20.05.46-patched.apk > /dev/null 2>&1; then
+            
+            # Tampilkan informasi APK
+            APK_SIZE=$(stat -c%s youtube-20.21.37-patched.apk)
+            echo "✓ Patched APK size: $APK_SIZE bytes"
+            
+            # Verifikasi integritas APK
+            if unzip -t youtube-20.21.37-patched.apk > /dev/null 2>&1; then
               echo "✓ Patched APK is valid and intact"
             else
               echo "✗ Patched APK is corrupted"
@@ -95,8 +129,8 @@ jobs:
       - name: Upload Patched APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-20.05.46-anddea-mpp-signed
-          path: youtube-20.05.46-patched.apk
+          name: youtube-20.21.37-anddea-mpp-signed
+          path: youtube-20.21.37-patched.apk
           retention-days: 1
 
       # Cleanup
