@@ -89,6 +89,9 @@ jobs:
               --continue-on-error \
               --disable "Custom branding" \
               --enable "Theme" \
+              --enable "Spoof Wi-Fi connection" \
+              --enable "MaterialYou" \
+              --enable "Hide accessibility controls dialog" \
               -O darkThemeBackgroundColor=@android:color/black \
               --keystore my-release-key.keystore \
               --keystore-password "${{ secrets.MY_KEY_PASS }}" \
