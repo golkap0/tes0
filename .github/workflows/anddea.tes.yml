@@ -1,4 +1,4 @@
-name: Patch YouTube with anddea pre Patches
+name: Patch YouTube with anddea Pre-release Patches
 
 on:
   workflow_dispatch: # Hanya dijalankan manual
@@ -36,7 +36,7 @@ jobs:
           wget -O tools/morphe-cli.jar "$CLI_URL"
 
       # Download patches anddea VERSI PRE-RELEASE TERBARU
-      - name: Download anddea Patches (Latest Pre-release)
+      - name: Download anddea Patches (Pre-release)
         run: |
           mkdir -p patches
           PATCHES_URL=$(curl -sL https://api.github.com/repos/anddea/revanced-patches/releases \
@@ -59,6 +59,17 @@ jobs:
         run: |
           wget -O youtube-20.05.46.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.05.46.apk"
           echo "✓ YouTube v20.05.46 downloaded"
+
+      # Perbaiki struktur header ZIP APK yang korup/mismatch
+      - name: Normalize APK ZIP Structure
+        run: |
+          echo "Memperbaiki struktur ZIP APK..."
+          mkdir -p apk_temp
+          unzip -q youtube-20.05.46.apk -d apk_temp
+          (cd apk_temp && zip -q -r -0 ../youtube-fixed.apk *)
+          rm -rf apk_temp
+          mv youtube-fixed.apk youtube-20.05.46.apk
+          echo "✓ Header ZIP APK berhasil dinormalisasi"
 
       # Decode Custom Keystore dari GitHub Secrets
       - name: Prepare Custom Key
