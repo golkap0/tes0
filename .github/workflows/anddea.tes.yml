@@ -1,164 +1,118 @@
-name: Auto Patch YouTube with anddea pre-release Patches TEST
+name: Patch YouTube with anddea latest Patches
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Hanya dijalankan manual
 
 jobs:
   patch-youtube:
     runs-on: ubuntu-latest
 
-    env:
-      APK_VERSION: "20.26.46"
-      APK_FILE: "youtube-20.26.46.apk"
-      PATCHED_FILE: "youtube-20.26.46-patched.apk"
-      MORPHE_VERSION: ""   # optional: set to a fixed release tag if you want pinning
-      PATCHES_VERSION: ""  # optional: set to a fixed release tag if you want pinning
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v4
+
+      - name: Show release info
+        run: |
+          echo "Release tag: ${{ github.event.release.tag_name }}"
+          echo "Release name: ${{ github.event.release.name }}"
+          echo "Prerelease: ${{ github.event.release.prerelease }}"
 
       - name: Set up Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
-          distribution: temurin
-          java-version: "21"
-
-      - name: Download Morphe CLI
-        shell: bash
+          java-version: '21'
+          distribution: 'temurin'
+      
+      - name: Download morphe-cli
         run: |
-          set -euo pipefail
           mkdir -p tools
-
-          CLI_URL="$(curl -fsSL -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/MorpheApp/morphe-desktop/releases/latest \
-            | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)"
-
-          if [ -z "${CLI_URL}" ] || [ "${CLI_URL}" = "null" ]; then
-            echo "Error: Could not find morphe-cli.jar download URL"
+          CLI_URL=$(curl -sL https://api.github.com/repos/MorpheApp/morphe-desktop/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
+          
+          if [ -z "$CLI_URL" ] || [ "$CLI_URL" = "null" ]; then
+            echo "Error: Gagal mendapatkan URL download untuk morphe-cli.jar"
             exit 1
           fi
+          
+          echo "Downloading morphe-cli dari: $CLI_URL"
+          wget -O tools/morphe-cli.jar "$CLI_URL"
 
-          echo "Downloading Morphe CLI from: ${CLI_URL}"
-          curl -fsSL --retry 3 --retry-all-errors -o tools/morphe-cli.jar "${CLI_URL}"
-
-          test -s tools/morphe-cli.jar
-          file tools/morphe-cli.jar
-
-      - name: Download anddea patches
-        shell: bash
+      # Download patches anddea VERSI PRE-RELEASE TERBARU
+      - name: Download anddea Patches (Latest Pre-release)
         run: |
-          set -euo pipefail
           mkdir -p patches
-
-          PATCHES_URL="$(curl -fsSL -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/anddea/revanced-patches/releases \
-            | jq -r '[.[] | select(.prerelease == true)] | .[0].assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)"
-
-          if [ -z "${PATCHES_URL}" ] || [ "${PATCHES_URL}" = "null" ]; then
-            echo "Pre-release patches not found. Falling back to latest stable."
-            PATCHES_URL="$(curl -fsSL -H "Accept: application/vnd.github+json" \
-              -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              https://api.github.com/repos/anddea/revanced-patches/releases/latest \
-              | jq -r '.assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)"
-          fi
-
-          if [ -z "${PATCHES_URL}" ] || [ "${PATCHES_URL}" = "null" ]; then
-            echo "Error: Could not find patches.mpp download URL"
+          PATCHES_URL=$(curl -sL https://api.github.com/repos/anddea/revanced-patches/releases \
+            | jq -r 'map(select(.prerelease == true)) | .[0].assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
+          
+          if [ -z "$PATCHES_URL" ] || [ "$PATCHES_URL" = "null" ]; then
+            echo "Error: Gagal mendapatkan URL download untuk patches.mpp (Pre-release)"
             exit 1
           fi
+          
+          echo "Downloading pre-release patches dari: $PATCHES_URL"
+          wget -O patches/patches.mpp "$PATCHES_URL"
+          
+          # Verifikasi versi patch yang diunduh
+          PATCH_VERSION=$(echo "$PATCHES_URL" | grep -o 'v[0-9][^/]*' | head -1)
+          echo "✓ anddea patches ($PATCH_VERSION - Pre-release) downloaded"
 
-          echo "Downloading patches from: ${PATCHES_URL}"
-          curl -fsSL --retry 3 --retry-all-errors -o patches/patches.mpp "${PATCHES_URL}"
-
-          test -s patches/patches.mpp
-          file patches/patches.mpp
-
-      - name: Download YouTube APK
-        shell: bash
+      # Download YouTube APK v20.05.46
+      - name: Download YouTube APK v20.05.46
         run: |
-          set -euo pipefail
+          wget -O youtube-20.05.46.apk "https://raw.githubusercontent.com/golkap0/paa/refs/heads/main/youtube-20.05.46.apk"
+          echo "✓ YouTube v20.05.46 downloaded"
 
-          APK_URL="https://github.com/golkap0/paa/raw/refs/heads/main/youtube-${APK_VERSION}.apk"
-
-          echo "Downloading YouTube APK from: ${APK_URL}"
-          curl -fsSL --retry 3 --retry-all-errors -o "${APK_FILE}" "${APK_URL}"
-
-          if [ ! -s "${APK_FILE}" ]; then
-            echo "Error: Failed to download YouTube APK v${APK_VERSION}"
-            exit 1
-          fi
-
-          echo "Validating ZIP structure before patching..."
-          file "${APK_FILE}"
-          unzip -t "${APK_FILE}" >/dev/null
-
-          echo "APK validation passed"
-
+      # Decode Custom Keystore dari GitHub Secrets
       - name: Prepare Custom Key
-        shell: bash
         run: |
-          set -euo pipefail
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
-          test -s my-release-key.keystore
+          echo "✓ Custom Keystore prepared"
 
-      - name: Patch YouTube APK
-        shell: bash
+      # Proses Patching dengan Custom Key & Armv7 Only
+      - name: Patch YouTube v20.05.46
         run: |
-          set -euo pipefail
-
-          echo "Attempting to patch ${APK_FILE}..."
+          echo "Starting patching process..."
           java -jar tools/morphe-cli.jar patch \
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
             --continue-on-error \
             --disable "Custom branding" \
             --enable "Theme" \
-            --enable "Spoof Wi-Fi connection" \
-            --enable "MaterialYou" \
-            --enable "Hide accessibility controls dialog" \
             -O darkThemeBackgroundColor=@android:color/black \
             --keystore my-release-key.keystore \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
             --keystore-entry-alias "fas" \
             --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
-            "${APK_FILE}" \
-            --out "${PATCHED_FILE}"
+            youtube-20.05.46.apk \
+            --out youtube-20.05.46-patched.apk
+          echo "✓ Patching completed"
 
-          if [ ! -s "${PATCHED_FILE}" ]; then
-            echo "Error: Patched APK was not created"
-            exit 1
-          fi
-
-          echo "Validating patched APK..."
-          unzip -t "${PATCHED_FILE}" >/dev/null
-
-          echo "PATCHED_VERSION=${APK_VERSION}" >> "$GITHUB_ENV"
-          echo "PATCHED_FILE=${PATCHED_FILE}" >> "$GITHUB_ENV"
-
+      # Verify Patched APK
       - name: Verify Patched APK
-        shell: bash
         run: |
-          set -euo pipefail
-          if [ -f "${{ env.PATCHED_FILE }}" ]; then
-            echo "✓ Patched APK (${{ env.PATCHED_VERSION }}) created successfully"
+          if [ -f youtube-20.05.46-patched.apk ]; then
+            echo "✓ Patched APK created successfully"
+            if unzip -t youtube-20.05.46-patched.apk > /dev/null 2>&1; then
+              echo "✓ Patched APK is valid and intact"
+            else
+              echo "✗ Patched APK is corrupted"
+              exit 1
+            fi
           else
-            echo "✗ No patched APK created"
+            echo "✗ Patching failed"
             exit 1
           fi
 
+      # Upload ke Artifacts - Berlaku 1 Hari
       - name: Upload Patched APK to Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: youtube-${{ env.PATCHED_VERSION }}-anddea-mpp-signed
-          path: ${{ env.PATCHED_FILE }}
+          name: youtube-20.05.46-anddea-prerelease-mpp-signed
+          path: youtube-20.05.46-patched.apk
           retention-days: 1
 
+      # Cleanup
       - name: Cleanup
         if: always()
-        shell: bash
         run: |
-          rm -rf tools patches *.apk *.keystore
+          rm -f *.apk
+          rm -f *.keystore
           echo "✓ Cleanup completed"
