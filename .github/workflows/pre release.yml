@@ -18,14 +18,40 @@ jobs:
       
 
       - name: Download tools & patches
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -eu
           mkdir -p tools patches
-          # Download CLI terbaru
-          CLI_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-cli/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
-          wget -O tools/morphe-cli.jar "$CLI_URL"
-          # Download MPP Pre-release terbaru (indeks [0])
-          PATCHES_URL=$(curl -s https://api.github.com/repos/MorpheApp/morphe-patches/releases | jq -r '.[0].assets[] | select(.name | endswith(".mpp")) | .browser_download_url' | head -1)
-          wget -O patches/patches.mpp "$PATCHES_URL"
+
+          api() {
+            curl -fsSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "$1"
+          }
+
+          # Pakai /releases (ambil [0]) supaya pre-release ikut terbaca,
+          # jangan /releases/latest
+          CLI_URL=$(api https://api.github.com/repos/MorpheApp/morphe-cli/releases \
+            | jq -r '[.[0].assets[] | select(.name | endswith(".jar"))][0].browser_download_url // empty')
+
+          if [ -z "$CLI_URL" ]; then
+            echo "::error::URL morphe-cli.jar tidak ditemukan. Cek nama repo dan nama aset."
+            exit 1
+          fi
+          wget -q -O tools/morphe-cli.jar "$CLI_URL"
+
+          PATCHES_URL=$(api https://api.github.com/repos/MorpheApp/morphe-patches/releases \
+            | jq -r '[.[0].assets[] | select(.name | endswith(".mpp"))][0].browser_download_url // empty')
+
+          if [ -z "$PATCHES_URL" ]; then
+            echo "::error::URL patches.mpp tidak ditemukan. Cek nama repo dan nama aset."
+            exit 1
+          fi
+          wget -q -O patches/patches.mpp "$PATCHES_URL"
+
+          echo "✓ tools/morphe-cli.jar dan patches/patches.mpp siap"
 
       - name: Download YouTube APK
         run: |
