@@ -1,11 +1,14 @@
-name: Build Morphe YouTube Patched (APKMirror)
+name: Build Morphe YouTube Patched
 
-on: workflow_dispatch:
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   patch-youtube:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -15,7 +18,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Download tools & patches
+      - name: Download tools and patches
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -29,67 +32,63 @@ jobs:
               "$1"
           }
 
-          CLI_URL=$(api https://api.github.com/repos/MorpheApp/morphe-cli/releases \
-            | jq -r '[.[0].assets[] | select(.name | endswith(".jar"))][0].browser_download_url // empty')
-
+          CLI_URL=$(api https://api.github.com/repos/MorpheApp/morphe-cli/releases | jq -r '[.[0].assets[] | select(.name | endswith(".jar"))][0].browser_download_url // empty')
           if [ -z "$CLI_URL" ]; then
-            echo "::error::URL morphe-cli.jar tidak ditemukan. Cek nama repo dan nama aset."
+            echo "::error::morphe-cli.jar not found"
             exit 1
           fi
           wget -q -O tools/morphe-cli.jar "$CLI_URL"
 
-          PATCHES_URL=$(api https://api.github.com/repos/MorpheApp/morphe-patches/releases \
-            | jq -r '[.[0].assets[] | select(.name | endswith(".mpp"))][0].browser_download_url // empty')
-
+          PATCHES_URL=$(api https://api.github.com/repos/MorpheApp/morphe-patches/releases | jq -r '[.[0].assets[] | select(.name | endswith(".mpp"))][0].browser_download_url // empty')
           if [ -z "$PATCHES_URL" ]; then
-            echo "::error::URL patches.mpp tidak ditemukan. Cek nama repo dan nama aset."
+            echo "::error::patches.mpp not found"
             exit 1
           fi
           wget -q -O patches/patches.mpp "$PATCHES_URL"
 
-          echo "✓ tools/morphe-cli.jar dan patches/patches.mpp siap"
+          echo "Tools ready"
 
-      - name: Unduh YouTube APK dari APKMirror
+      - name: Download YouTube APK from APKMirror
         run: |
           set -eu
           curl -fsSL https://github.com/tanishqmanuja/apkmirror-downloader/releases/latest/download/apkmd -o apkmd
           chmod +x apkmd
 
-          cat << 'EOF' > apps.json
-          {
-            "options": {
-              "outDir": "."
-            },
-            "apps": [
-              {
-                "org": "google-inc",
-                "repo": "youtube",
-                "version": "20.21.37",
-                "type": "apk",
-                "arch": "universal",
-                "outFile": "youtube.apk"
-              }
-            ]
-          }
-          EOF
+          echo '{
+            "options": {"outDir": "."},
+            "apps": [{
+              "org": "google-inc",
+              "repo": "youtube",
+              "version": "20.21.37",
+              "type": "apk",
+              "arch": "universal",
+              "outFile": "youtube.apk"
+            }]
+          }' > apps.json
 
           ./apkmd apps.json
-          echo "✓ YouTube APK downloaded via APKMirror CLI"
 
-      - name: Prepare Custom Keystore
+      - name: Restore keystore
         run: |
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
-          echo "✓ Keystore file restored"
 
-      - name: Patch YouTube (custom package, default icon/nama)
+      - name: Show available patches with options
+        run: |
+          java -jar tools/morphe-cli.jar list-patches \
+            --patches patches/patches.mpp \
+            --with-options \
+            --with-descriptions \
+            | grep -iE "package|branding" || true
+
+      - name: Patch YouTube
         run: |
           java -jar tools/morphe-cli.jar patch \
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
             --continue-on-error \
-            -d "Custom branding" \
-            -e "Change package name" \
-            -OpackageName=com.fas.morphe \
+            --disable "Custom branding" \
+            --include "Change package name" \
+            --options "packageName=com.fas.morphe" \
             --keystore my-release-key.keystore \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
             --keystore-entry-alias "fas" \
@@ -97,10 +96,10 @@ jobs:
             youtube.apk \
             --out youtube-20.21.37-morphe.apk
 
-      - name: Upload Patched APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Morphe-YouTube-v20.21.37-com.fas.morphe
+          name: Morphe-YouTube-v20.21.37
           path: youtube-20.21.37-morphe.apk
           retention-days: 7
 
