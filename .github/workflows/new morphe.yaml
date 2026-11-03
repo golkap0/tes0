@@ -81,13 +81,33 @@ jobs:
         run: |
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
           echo "✓ Keystore file restored"
+
+      - name: Generate and Configure Patch Options
+        run: |
+          set -eu
+          # 1. Generate options.json khusus paket YouTube
+          java -jar tools/morphe-cli.jar options-create \
+            --patches patches/patches.mpp \
+            --filter-package-name com.google.android.youtube \
+            --out options.json
+
+          # 2. Aktifkan 'Change package name' dengan custom package com.fas.morphe,
+          # serta pastikan 'Custom branding' dimatikan agar icon & app name tetap asli
+          jq '.patches["Change package name"].enabled = true |
+              .patches["Change package name"].options.packageName = "com.fas.morphe" |
+              .patches["Custom branding"].enabled = false' options.json > options.tmp.json && mv options.tmp.json options.json
+
+          echo "✓ options.json berhasil dikonfigurasi:"
+          jq '.patches | {"Change package name": .["Change package name"], "Custom branding": .["Custom branding"]}' options.json
       
       - name: Patch YouTube
         run: |
           java -jar tools/morphe-cli.jar patch \
             --patches patches/patches.mpp \
+            --options-file options.json \
             --striplibs armeabi-v7a \
             --continue-on-error \
+            -e "Change package name" \
             -d "Custom branding" \
             --keystore my-release-key.keystore \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
@@ -105,4 +125,4 @@ jobs:
 
       - name: Cleanup
         if: always()
-        run: rm -f *.apk *.keystore apps.json apkmd
+        run: rm -f *.apk *.keystore apps.json apkmd options*.json
