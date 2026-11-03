@@ -2,8 +2,8 @@ name: Auto Run Patch YouTube v20.26.46 (Release with Changelog)
 
 on:
   schedule:
-    # Berjalan otomatis setiap hari pada pukul 17:00 UTC (00:00 WIB)
-    cron: '0 16 * * *'
+    # Berjalan otomatis setiap hari pada pukul 16:00 UTC (23:00 WIB)
+    - cron: '0 16 * * *'
   workflow_dispatch:
     inputs:
       force:
@@ -95,7 +95,6 @@ jobs:
       - name: Download morphe-cli
         run: |
           mkdir -p tools
-          # Menggunakan nama repo baru 'morphe-desktop' dan menambahkan '-sL' agar curl mengikuti redirect
           CLI_URL=$(curl -sL https://api.github.com/repos/MorpheApp/morphe-desktop/releases/latest | jq -r '.assets[] | select(.name | contains(".jar")) | .browser_download_url' | head -1)
           
           if [ -z "$CLI_URL" ] || [ "$CLI_URL" = "null" ]; then
