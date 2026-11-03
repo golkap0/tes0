@@ -5,6 +5,7 @@ on: workflow_dispatch:
 jobs:
   patch-youtube:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -30,15 +31,23 @@ jobs:
 
           CLI_URL=$(api https://api.github.com/repos/MorpheApp/morphe-cli/releases \
             | jq -r '[.[0].assets[] | select(.name | endswith(".jar"))][0].browser_download_url // empty')
-          [ -z "$CLI_URL" ] && { echo "::error::morphe-cli.jar tidak ditemukan"; exit 1; }
+
+          if [ -z "$CLI_URL" ]; then
+            echo "::error::URL morphe-cli.jar tidak ditemukan. Cek nama repo dan nama aset."
+            exit 1
+          fi
           wget -q -O tools/morphe-cli.jar "$CLI_URL"
 
           PATCHES_URL=$(api https://api.github.com/repos/MorpheApp/morphe-patches/releases \
             | jq -r '[.[0].assets[] | select(.name | endswith(".mpp"))][0].browser_download_url // empty')
-          [ -z "$PATCHES_URL" ] && { echo "::error::patches.mpp tidak ditemukan"; exit 1; }
+
+          if [ -z "$PATCHES_URL" ]; then
+            echo "::error::URL patches.mpp tidak ditemukan. Cek nama repo dan nama aset."
+            exit 1
+          fi
           wget -q -O patches/patches.mpp "$PATCHES_URL"
 
-          echo "✓ tools siap"
+          echo "✓ tools/morphe-cli.jar dan patches/patches.mpp siap"
 
       - name: Unduh YouTube APK dari APKMirror
         run: |
@@ -48,23 +57,29 @@ jobs:
 
           cat << 'EOF' > apps.json
           {
-            "options": { "outDir": "." },
-            "apps": [{
-              "org": "google-inc",
-              "repo": "youtube",
-              "version": "20.21.37",
-              "type": "apk",
-              "arch": "universal",
-              "outFile": "youtube.apk"
-            }]
+            "options": {
+              "outDir": "."
+            },
+            "apps": [
+              {
+                "org": "google-inc",
+                "repo": "youtube",
+                "version": "20.21.37",
+                "type": "apk",
+                "arch": "universal",
+                "outFile": "youtube.apk"
+              }
+            ]
           }
           EOF
 
           ./apkmd apps.json
+          echo "✓ YouTube APK downloaded via APKMirror CLI"
 
       - name: Prepare Custom Keystore
         run: |
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
+          echo "✓ Keystore file restored"
 
       - name: Patch YouTube (custom package, default icon/nama)
         run: |
@@ -72,8 +87,9 @@ jobs:
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
             --continue-on-error \
-            -e "Custom branding" \
-            --options "Change package name=packageName=com.fas.morphe" \
+            -d "Custom branding" \
+            -e "Change package name" \
+            -OpackageName=com.fas.morphe \
             --keystore my-release-key.keystore \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
             --keystore-entry-alias "fas" \
