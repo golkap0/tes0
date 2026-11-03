@@ -53,7 +53,7 @@ jobs:
       - name: Download YouTube APK
         run: |
           pip install gdown
-          gdown --id 1vAdIKRRV6vU3HeqHzN5YtaM_izxpneoh -O youtube.apk
+          gdown 1vAdIKRRV6vU3HeqHzN5YtaM_izxpneoh -O youtube.apk
           echo "✓ YouTube APK downloaded"
       
       - name: Prepare Custom Keystore
