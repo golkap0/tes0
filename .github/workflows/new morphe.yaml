@@ -71,6 +71,7 @@ jobs:
             --striplibs armeabi-v7a \
             --continue-on-error \
             -d "Custom branding" \
+            -e "Clone App"
             -OpackageName=com.fas.morphe \
             -d "Restore original titles" \
             -d "DeArrow" \
