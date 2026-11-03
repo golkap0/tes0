@@ -48,25 +48,14 @@ jobs:
 
           echo "Tools ready"
 
-      - name: Download YouTube APK from APKMirror
+      - name: Download YouTube APK
         run: |
           set -eu
-          curl -fsSL https://github.com/tanishqmanuja/apkmirror-downloader/releases/latest/download/apkmd -o apkmd
-          chmod +x apkmd
-
-          echo '{
-            "options": {"outDir": "."},
-            "apps": [{
-              "org": "google-inc",
-              "repo": "youtube",
-              "version": "20.21.37",
-              "type": "apk",
-              "arch": "universal",
-              "outFile": "youtube.apk"
-            }]
-          }' > apps.json
-
-          ./apkmd apps.json
+          curl -fL --retry 3 --retry-delay 2 \
+            https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.21.37.apk \
+            -o youtube.apk
+          test -s youtube.apk
+          ls -lh youtube.apk
 
       - name: Restore keystore
         run: |
