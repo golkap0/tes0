@@ -16,7 +16,6 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
       
-
       - name: Download tools & patches
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -31,8 +30,6 @@ jobs:
               "$1"
           }
 
-          # Pakai /releases (ambil [0]) supaya pre-release ikut terbaca,
-          # jangan /releases/latest
           CLI_URL=$(api https://api.github.com/repos/MorpheApp/morphe-cli/releases \
             | jq -r '[.[0].assets[] | select(.name | endswith(".jar"))][0].browser_download_url // empty')
 
@@ -58,7 +55,6 @@ jobs:
           wget https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.21.37.apk -O youtube.apk
           echo "✓ YouTube APK downloaded"
       
-      # Step ini mengubah teks Base64 kembali menjadi file .keystore asli kamu
       - name: Prepare Custom Keystore
         run: |
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
@@ -71,7 +67,7 @@ jobs:
             --striplibs armeabi-v7a \
             --continue-on-error \
             -d "Custom branding" \
-            -e "Clone App"
+            -e "Clone App" \
             -OpackageName=com.fas.morphe \
             -d "Restore original titles" \
             -d "DeArrow" \
