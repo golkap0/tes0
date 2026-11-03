@@ -1,24 +1,23 @@
-name: Build Morphe YouTube Patched
+name: tes MORPHE Patch YouTube patch pre release
 
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
   patch-youtube:
     runs-on: ubuntu-latest
+    
     steps:
       - uses: actions/checkout@v4
-
+      
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
+      
 
-      - name: Download tools and patches
+      - name: Download tools & patches
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -32,66 +31,63 @@ jobs:
               "$1"
           }
 
-          CLI_URL=$(api https://api.github.com/repos/MorpheApp/morphe-cli/releases | jq -r '[.[0].assets[] | select(.name | endswith(".jar"))][0].browser_download_url // empty')
+          # Pakai /releases (ambil [0]) supaya pre-release ikut terbaca,
+          # jangan /releases/latest
+          CLI_URL=$(api https://api.github.com/repos/MorpheApp/morphe-cli/releases \
+            | jq -r '[.[0].assets[] | select(.name | endswith(".jar"))][0].browser_download_url // empty')
+
           if [ -z "$CLI_URL" ]; then
-            echo "::error::morphe-cli.jar not found"
+            echo "::error::URL morphe-cli.jar tidak ditemukan. Cek nama repo dan nama aset."
             exit 1
           fi
           wget -q -O tools/morphe-cli.jar "$CLI_URL"
 
-          PATCHES_URL=$(api https://api.github.com/repos/MorpheApp/morphe-patches/releases | jq -r '[.[0].assets[] | select(.name | endswith(".mpp"))][0].browser_download_url // empty')
+          PATCHES_URL=$(api https://api.github.com/repos/MorpheApp/morphe-patches/releases \
+            | jq -r '[.[0].assets[] | select(.name | endswith(".mpp"))][0].browser_download_url // empty')
+
           if [ -z "$PATCHES_URL" ]; then
-            echo "::error::patches.mpp not found"
+            echo "::error::URL patches.mpp tidak ditemukan. Cek nama repo dan nama aset."
             exit 1
           fi
           wget -q -O patches/patches.mpp "$PATCHES_URL"
 
-          echo "Tools ready"
+          echo "✓ tools/morphe-cli.jar dan patches/patches.mpp siap"
 
       - name: Download YouTube APK
         run: |
-          set -eu
-          curl -fL --retry 3 --retry-delay 2 \
-            https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.21.37.apk \
-            -o youtube.apk
-          test -s youtube.apk
-          ls -lh youtube.apk
-
-      - name: Restore keystore
+          wget https://github.com/golkap0/paa/raw/refs/heads/main/youtube-20.21.37.apk -O youtube.apk
+          echo "✓ YouTube APK downloaded"
+      
+      # Step ini mengubah teks Base64 kembali menjadi file .keystore asli kamu
+      - name: Prepare Custom Keystore
         run: |
           echo "${{ secrets.MY_KEY_STORE }}" | base64 -d > my-release-key.keystore
-
-      - name: Show available patches with options
-        run: |
-          java -jar tools/morphe-cli.jar list-patches \
-            --patches patches/patches.mpp \
-            --with-options \
-            --with-descriptions \
-            | grep -iE "package|branding" || true
-
+          echo "✓ Keystore file restored"
+      
       - name: Patch YouTube
         run: |
           java -jar tools/morphe-cli.jar patch \
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
             --continue-on-error \
-            -e "Clone app" \
             -d "Custom branding" \
             -OpackageName=com.fas.morphe \
+            -d "Restore original titles" \
+            -d "DeArrow" \
             --keystore my-release-key.keystore \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
             --keystore-entry-alias "fas" \
             --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
             youtube.apk \
-            --out youtube-20.21.37-morphe.apk
+            --out youtube-20.21.37-patched.apk
 
-      - name: Upload APK
+      - name: Upload Patched APK
         uses: actions/upload-artifact@v4
         with:
-          name: Morphe-YouTube-v20.21.37
-          path: youtube-20.21.37-morphe.apk
+          name: youtube-v20.21.37-signed
+          path: youtube-20.21.37-patched.apk
           retention-days: 7
 
       - name: Cleanup
         if: always()
-        run: rm -f *.apk *.keystore apps.json apkmd
+        run: rm -f *.apk *.keystore
