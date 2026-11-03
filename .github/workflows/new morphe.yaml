@@ -75,8 +75,8 @@ jobs:
             --patches patches/patches.mpp \
             --striplibs armeabi-v7a \
             --continue-on-error \
+            -e "Clone app" \
             -d "Custom branding" \
-            -e "Change package name" \
             -OpackageName=com.fas.morphe \
             --keystore my-release-key.keystore \
             --keystore-password "${{ secrets.MY_KEY_PASS }}" \
