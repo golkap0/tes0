@@ -1,9 +1,9 @@
-name: Auto Run Patch YouTube v20.21.37 (Release with Changelog)
+name: Auto Run Patch YouTube v20.26.46 (Release with Changelog)
 
 on:
- # schedule:
+  schedule:
     # Berjalan otomatis setiap hari pada pukul 17:00 UTC (00:00 WIB)
-    #cron: '0 16 * * *'
+    cron: '0 16 * * *'
   workflow_dispatch:
     inputs:
       force:
@@ -108,7 +108,7 @@ jobs:
 
       - name: Download YouTube APK
         run: |
-          gdown "16FdsZ2vmg3O_3QbSjer9yOxa8q5hZKNW" -O youtube.apk --quiet
+          gdown "1vAdIKRRV6vU3HeqHzN5YtaM_izxpneoh" -O youtube.apk --quiet
       
       - name: Prepare Custom Key
         run: |
@@ -126,15 +126,15 @@ jobs:
             --keystore-entry-alias "fas" \
             --keystore-entry-password "${{ secrets.MY_KEY_PASS }}" \
             youtube.apk \
-            --out youtube-20.21.37-patched.apk
+            --out youtube-20.26.46-patched.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "patch-${{ needs.check-update.outputs.mpp_tag }}"
-          name: "YouTube v20.21.37 (MPP ${{ needs.check-update.outputs.mpp_tag }})"
+          name: "YouTube v20.26.46 (MPP ${{ needs.check-update.outputs.mpp_tag }})"
           body_path: changelog.txt
-          files: youtube-20.21.37-patched.apk
+          files: youtube-20.26.46-patched.apk
           draft: false
           prerelease: false
         env:
